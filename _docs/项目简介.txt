@@ -1,0 +1,119 @@
+﻿
+LabGuard AI 项目说明文档（Java 版）
+AI 驱动的实验室安全巡检与整改管理智能体
+一、项目背景
+实验室安全管理涉及日常巡检、隐患记录、责任分配、整改跟踪和复查闭环。传统人工巡检记录容易出现信息分散、整改状态不透明、复查遗漏等问题。LabGuard AI 旨在将 AI 辅助的可见风险识别与结构化整改工作流结合，形成可演示、可追踪的实验室安全巡检原型。
+二、项目目标
+构建一个基于 Java 的可运行原型，展示从实验室图片上传、AI 风险分析、人工确认、整改工单创建，到整改提交、复查关闭或退回整改的完整流程。系统定位为安全管理辅助工具，不替代专业人员的现场检查与判断。
+三、核心使用流程
+上传实验室图片并触发视觉分析。
+展示风险类别、风险等级、可见证据、置信度和建议措施。
+由用户人工确认风险，避免未经审核的模型结果直接触发管理动作。
+创建整改工单并填写责任人。
+责任人提交整改说明或证据。
+复查人员确认整改结果；通过则关闭工单，未通过则退回整改。
+四、核心功能
+图片上传与风险识别
+通过网页上传图片，调用多模态视觉模型识别图像中可见的潜在安全隐患。初期优先覆盖少量可视化场景，例如通道疑似被阻挡。
+风险展示与人工审核
+结构化展示风险类别、位置、证据、风险等级和整改建议；模型输出需由人员确认。
+整改工单管理
+保存隐患类别、风险等级、位置、建议措施、责任人和当前状态。
+整改与复查闭环
+支持待整改、待复查、已关闭三种状态；复查未通过时退回待整改。
+本地数据持久化
+使用 SQLite 保存工单数据，避免部署独立数据库服务器，适合短周期原型。
+五、技术方案（Java）
+开发语言
+Java 17
+应用框架
+Spring Boot 3.5.x
+Web 层
+Spring MVC + Thymeleaf
+数据存储
+SQLite + Spring JDBC
+依赖与构建
+Maven
+测试
+JUnit 5 / Spring Boot Test
+AI 能力
+通过 HTTP 接口适配选定的多模态视觉 API；请求和响应格式须按服务商官方文档实现
+六、建议项目目录
+labguard-ai/
+├── pom.xml
+├── README.md
+├── .env.example
+├── src/main/java/com/labguard/
+│   ├── LabGuardApplication.java
+│   ├── controller/HomeController.java
+│   ├── model/Hazard.java
+│   ├── model/WorkOrder.java
+│   └── service/
+│       ├── AiVisionService.java
+│       └── WorkOrderService.java
+├── src/main/resources/
+│   ├── application.properties
+│   ├── schema.sql
+│   └── templates/index.html
+└── src/test/java/com/labguard/
+    └── LabGuardApplicationTests.java
+七、主要模块职责
+LabGuardApplication.java
+Spring Boot 启动入口。
+HomeController.java
+处理图片上传、结果展示、创建工单、提交整改和复查请求。
+AiVisionService.java
+封装视觉模型调用、响应结构校验和错误处理。演示模式必须显式标注模拟数据。
+WorkOrderService.java
+封装 SQLite 工单持久化与状态转换规则。
+Hazard.java / WorkOrder.java
+定义风险和工单的数据模型。
+schema.sql
+初始化 SQLite 工单表结构。
+八、工单状态设计
+PENDING_REMEDIATION（待整改） → PENDING_REVIEW（待复查） → CLOSED（已关闭）
+复查不通过时，从 PENDING_REVIEW 返回 PENDING_REMEDIATION。状态转换应由业务服务校验，不应只依赖前端按钮。
+九、依赖清单
+spring-boot-starter-web
+MVC 控制器、文件上传与 Web 服务
+spring-boot-starter-thymeleaf
+服务端 HTML 模板
+spring-boot-starter-validation
+请求参数校验基础
+spring-boot-starter-jdbc
+JDBC 数据访问
+sqlite-jdbc
+SQLite JDBC 驱动
+spring-boot-starter-test
+Spring Boot 测试与 JUnit
+十、启动方式
+前置条件：安装 JDK 17 或以上版本，以及 Maven 3.9 或以上版本。
+1. 解压项目目录并进入 labguard-ai-java。
+2. 复制 .env.example 为 .env（按需配置环境变量；当前演示模式默认开启）。
+3. 执行：mvn spring-boot:run
+4. 浏览器访问：http://localhost:8080
+5. 运行测试：mvn test
+十一、四人并行开发建议
+成员 A：AI 视觉服务
+负责 AiVisionService、API 适配、结构化 JSON 校验、错误处理和 AI 服务测试。
+成员 B：数据库与工单工作流
+负责 SQLite schema、WorkOrderService、状态转换和业务测试。
+成员 C：网页交互
+负责 Thymeleaf 页面、上传交互、风险展示、工单表单和状态反馈。
+成员 D：集成与交付
+负责项目构建、接口契约、集成测试、README、启动验证和演示准备；从第一天开始集成。
+十二、开发边界与风险控制
+当前 Java 骨架的演示模式使用固定样例数据，不代表图片已被真实分析。
+真实视觉 API 尚需按所选服务商官方协议实现请求和响应适配；不能把演示结果当成真实识别结果。
+模型无法仅凭图片可靠确认的事实应标注为不确定，并要求现场核实。
+API 调用失败时应明确报错，不得伪造成功结果。
+不得将 API 密钥、敏感实验室图片或其他机密信息提交到 Git 仓库。
+AI 输出用于辅助决策，不替代专业安全检查；工单创建和关闭应保留人工确认。
+十三、原型验收标准
+项目可在新环境按 README 成功启动。
+可以上传图片并明确区分演示模式与真实 AI 模式。
+人工确认后可创建并持久化整改工单。
+工单支持提交整改、复查通过关闭、复查未通过退回整改。
+重新启动应用后，已保存的工单仍存在。
+关键业务逻辑有自动化测试，且演示流程稳定可复现。
+

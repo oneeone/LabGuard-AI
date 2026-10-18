@@ -1,0 +1,7 @@
+.idea/
+*.iml
+target/
+.env
+*.db
+*.db-journal
+uploads/
