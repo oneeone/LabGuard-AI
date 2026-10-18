@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LabGuard AI</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 32px auto; padding: 0 18px; color: #1f2937; }
+        h1 { margin-bottom: 4px; } .muted { color: #64748b; }
+        .panel { border: 1px solid #dbe2ea; border-radius: 12px; padding: 18px; margin: 18px 0; }
+        .alert { padding: 12px; border-radius: 8px; background: #fff7ed; margin: 12px 0; }
+        .success { background: #ecfdf5; } button { padding: 8px 12px; cursor: pointer; }
+        input, textarea { margin: 5px 0 10px; max-width: 100%; } textarea { width: 95%; min-height: 50px; }
+        .tag { background: #f1f5f9; border-radius: 5px; padding: 3px 7px; font-size: .9em; }
+    </style>
+</head>
+<body>
+<h1>🛡️ LabGuard AI</h1>
+<p class="muted">AI 驱动的实验室安全巡检与整改工作流</p>
+
+<div th:if="${message}" class="alert success" th:text="${message}"></div>
+<div th:if="${error}" class="alert">
+    <span th:if="${errorType}" class="tag" th:text="${errorType}"></span>
+    <span th:text="${error}"></span>
+</div>
+
+<section class="panel">
+    <h2>1. 图片巡检</h2>
+    <p class="muted">演示模式使用固定样例，不代表系统识别了上传图片。</p>
+    <form method="post" action="/inspect" enctype="multipart/form-data">
+        <input type="file" name="image" accept=".png,.jpg,.jpeg" required>
+        <button type="submit">分析图片</button>
+    </form>
+</section>
+
+<section th:if="${analysis}" class="panel">
+    <h2>2. 风险识别结果</h2>
+    <p th:if="${filename}" th:text="'上传文件：' + ${filename}"></p>
+    <div class="alert" th:classappend="${analysis.demo()} ? '' : 'success'">
+        <strong th:text="'AI result source: ' + ${analysis.source()}"></strong>
+        <p th:text="${analysis.sourceLabel()}"></p>
+        <p th:text="'模型/服务标识：' + ${analysis.model()}"></p>
+        <p th:text="'分析时间：' + ${analysis.analyzedAt()}"></p>
+    </div>
+    <p th:if="${#lists.isEmpty(hazards)}" class="muted">未发现可见风险线索。</p>
+    <div th:each="hazard : ${hazards}" class="panel">
+        <strong th:text="${hazard.category()}"></strong>
+        <span class="tag" th:text="${hazard.riskLevel()}"></span>
+        <p th:text="'位置：' + ${hazard.location()}"></p>
+        <p th:text="'证据：' + ${hazard.evidence()}"></p>
+        <p th:if="${hazard.confidence() != null}" th:text="'置信度：' + ${hazard.confidence()}"></p>
+        <p th:if="${hazard.uncertainty() != null and !hazard.uncertainty().isEmpty()}"
+           th:text="'不确定性：' + ${hazard.uncertainty()}"></p>
+        <p th:text="'建议：' + ${hazard.suggestedAction()}"></p>
+        <p th:if="${hazard.demoData()}" class="alert">演示数据：请勿将其视为真实 AI 识别结果。</p>
+        <form method="post" action="/work-orders">
+            <input type="hidden" name="category" th:value="${hazard.category()}">
+            <input type="hidden" name="riskLevel" th:value="${hazard.riskLevel()}">
+            <input type="hidden" name="location" th:value="${hazard.location()}">
+            <input type="hidden" name="evidence" th:value="${hazard.evidence()}">
+            <input type="hidden" name="confidence" th:value="${hazard.confidence()}">
+            <input type="hidden" name="uncertainty" th:value="${hazard.uncertainty()}">
+            <input type="hidden" name="suggestedAction" th:value="${hazard.suggestedAction()}">
+            <input type="hidden" name="needsHumanReview" th:value="${hazard.needsHumanReview()}">
+            <input type="hidden" name="demoData" th:value="${hazard.demoData()}">
+            <label>责任人：<input name="owner" value="待分配"></label>
+            <button type="submit">人工确认并创建工单</button>
+        </form>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>3. 整改工单</h2>
+    <p th:if="${#lists.isEmpty(workOrders)}" class="muted">暂无工单。</p>
+    <div th:each="order : ${workOrders}" class="panel">
+        <h3 th:text="'工单 #' + ${order.id()} + ' · ' + ${order.category()}"></h3>
+        <p><span class="tag" th:text="${order.status()}"></span>　<span th:text="'责任人：' + ${order.owner()}"></span></p>
+        <p th:text="'位置：' + ${order.location()}"></p>
+        <p th:text="'整改建议：' + ${order.suggestedAction()}"></p>
+        <form th:if="${order.status() == 'PENDING_REMEDIATION'}"
+              method="post" th:action="@{/work-orders/{id}/rectification(id=${order.id()})}">
+            <label>整改说明：<textarea name="note" required></textarea></label><br>
+            <button type="submit">提交整改，等待复查</button>
+        </form>
+        <div th:if="${order.status() == 'PENDING_REVIEW'}">
+            <form method="post" th:action="@{/work-orders/{id}/review(id=${order.id()})}" style="display:inline-block">
+                <input type="hidden" name="passed" value="true">
+                <input name="note" placeholder="复查说明">
+                <button type="submit">复查通过并关闭</button>
+            </form>
+            <form method="post" th:action="@{/work-orders/{id}/review(id=${order.id()})}" style="display:inline-block">
+                <input type="hidden" name="passed" value="false">
+                <input name="note" placeholder="未通过原因">
+                <button type="submit">未通过，退回整改</button>
+            </form>
+        </div>
+        <p th:if="${order.status() == 'CLOSED'}" class="muted">工单已关闭。</p>
+    </div>
+</section>
+</body>
+</html>
