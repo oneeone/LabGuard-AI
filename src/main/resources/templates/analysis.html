@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>分析结果 · LabGuard AI</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page page-wide">
+    <nav class="topnav">
+        <a th:href="@{/inspections/new}">新建巡检</a>
+        <a th:href="@{/workorders}">整改工单</a>
+    </nav>
+
+    <header class="page-header">
+        <h1>分析结果</h1>
+        <p>AI 只提供图片中可见的疑似线索，请逐条确认、修改或驳回；确认后方可创建整改工单。</p>
+    </header>
+
+    <div class="alert alert-success" th:if="${reviewMessage}" th:text="${reviewMessage}"></div>
+    <div class="alert alert-error" th:if="${reviewError}" th:text="${reviewError}"></div>
+
+    <section class="alert" th:classappend="${demo} ? 'alert-demo' : 'alert-real'">
+        <strong th:text="${sourceLabel}">演示数据，非真实识别结果</strong>
+        <p th:if="${demo}">当前结果为固定演示样例，未调用真实视觉 API，不代表系统分析了上传图片。</p>
+        <p th:unless="${demo}">结果由真实视觉模型生成，仍需巡检人员现场核实后方可作为管理依据。</p>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">巡检信息</h2>
+        <div class="inspection-grid">
+            <dl class="info-list">
+                <div><dt>实验室</dt><dd th:text="${inspection.labName()}">化学实验楼 A302</dd></div>
+                <div><dt>巡检人</dt><dd th:text="${inspection.inspector()}">张三</dd></div>
+                <div><dt>巡检时间</dt><dd th:text="${inspectedAtText}">2026-10-20 10:00</dd></div>
+                <div><dt>备注</dt><dd th:text="${inspection.note() != null ? inspection.note() : '—'}">—</dd></div>
+                <div><dt>确认进度</dt>
+                    <dd>
+                        待确认 <strong th:text="${pendingCount}">1</strong> ·
+                        已确认 <strong th:text="${confirmedCount}">0</strong> ·
+                        已驳回 <strong th:text="${rejectedCount}">0</strong>
+                    </dd>
+                </div>
+            </dl>
+            <figure class="thumb">
+                <img th:src="${inspection.imagePath()}" alt="巡检原图">
+                <figcaption>巡检原图</figcaption>
+            </figure>
+        </div>
+    </section>
+
+    <section class="hazard-section">
+        <h2>风险线索（<span th:text="${#lists.size(hazards)}">1</span> 条）</h2>
+        <p class="hint">风险等级为规则建议，最终等级由巡检人员确认或调整；模型自评置信度仅供参考。</p>
+
+        <div class="empty-state" th:if="${#lists.isEmpty(hazards)}">
+            未发现可见风险线索。AI 结果仅供参考，请以现场检查为准。
+        </div>
+
+        <datalist id="categoryOptions">
+            <option value="通道或安全出口被遮挡"></option>
+            <option value="物品摆放影响通行"></option>
+            <option value="电源使用不规范"></option>
+            <option value="危险区域管理不到位"></option>
+        </datalist>
+
+        <article class="card hazard-card"
+                 th:each="hazard : ${hazards}"
+                 th:classappend="${hazard.rejected()} ? 'is-rejected' : ''">
+
+            <header class="hazard-head">
+                <h3 th:text="${hazard.category()}">通道被遮挡</h3>
+                <div class="badge-group">
+                    <span class="badge badge-risk"
+                          th:classappend="'risk-' + ${hazard.riskLevelClass()}"
+                          th:text="|建议风险等级：${hazard.riskLevelLabel()}|">建议风险等级：中</span>
+                    <span class="badge badge-status"
+                          th:classappend="'status-' + ${hazard.statusClass()}"
+                          th:text="${hazard.statusLabel()}">待确认</span>
+                </div>
+            </header>
+            <p class="hint" th:if="${!#strings.isEmpty(hazard.riskLevelSourceLabel())}"
+               th:text="|等级来源：${hazard.riskLevelSourceLabel()}（由规则模块依据类别给出，巡检人员可调整）|">
+                等级来源：规则建议
+            </p>
+
+            <p class="hazard-line"><span class="label">位置</span><span th:text="${hazard.location()}">位置未说明</span></p>
+
+            <div class="evidence-box">
+                <span class="label">可见证据</span>
+                <p th:text="${hazard.evidence()}">无可见证据</p>
+            </div>
+
+            <div class="confidence">
+                <span class="label">模型自评置信度</span>
+                <th:block th:if="${hazard.confidenceProvided()}">
+                    <progress class="confidence-progress" max="100" th:value="${hazard.confidencePercent()}"></progress>
+                    <span class="tier" th:classappend="'tier-' + ${hazard.confidenceClass()}"
+                          th:text="|${hazard.confidenceLabel()}（${hazard.confidencePercent()}%）|">中（60%）</span>
+                </th:block>
+                <span class="tier tier-unknown" th:unless="${hazard.confidenceProvided()}">未提供</span>
+                <p class="hint">置信度仅代表模型对自身判断的估计，不作为风险等级或工单状态的依据。</p>
+            </div>
+
+            <p class="alert alert-warning" th:if="${hazard.needsHumanReview()}">
+                此结果需人工现场核实，请勿直接作为安全结论。
+            </p>
+
+            <div class="suggestion">
+                <span class="label">建议措施</span>
+                <ol class="action-list">
+                    <li th:each="action : ${hazard.suggestedActions()}" th:text="${action}">移除杂物</li>
+                </ol>
+            </div>
+
+            <div class="card-actions" th:if="${hazard.pending()}">
+                <form class="inline-form" method="post" data-guard
+                      th:action="@{/hazards/{id}/confirm(id=${hazard.id()})}">
+                    <input type="hidden" name="action" value="CONFIRM">
+                    <button type="submit" class="btn btn-primary">确认风险</button>
+                </form>
+
+                <details class="action-panel">
+                    <summary>修改风险内容</summary>
+                    <form method="post" class="stack" data-guard
+                          th:action="@{/hazards/{id}/confirm(id=${hazard.id()})}">
+                        <input type="hidden" name="action" value="EDIT">
+                        <div class="form-field">
+                            <label th:for="|category-${hazard.id()}|">风险类别</label>
+                            <input type="text" name="category" list="categoryOptions" maxlength="50"
+                                   th:id="|category-${hazard.id()}|"
+                                   th:value="${hazard.categoryInput()}">
+                        </div>
+                        <div class="form-field">
+                            <label th:for="|location-${hazard.id()}|">位置描述</label>
+                            <input type="text" name="location" maxlength="100"
+                                   th:id="|location-${hazard.id()}|"
+                                   th:value="${hazard.locationInput()}">
+                        </div>
+                        <div class="form-field">
+                            <label th:for="|evidence-${hazard.id()}|">可见证据</label>
+                            <textarea name="evidence" maxlength="300"
+                                      th:id="|evidence-${hazard.id()}|"
+                                      th:text="${hazard.evidenceInput()}"></textarea>
+                        </div>
+                        <div class="form-field">
+                            <label th:for="|action-${hazard.id()}|">建议措施</label>
+                            <textarea name="suggestedAction" maxlength="300"
+                                      th:id="|action-${hazard.id()}|"
+                                      th:text="${hazard.suggestedActionInput()}"></textarea>
+                        </div>
+                        <div class="form-field">
+                            <label th:for="|risk-${hazard.id()}|">建议风险等级</label>
+                            <select name="riskLevel" th:id="|risk-${hazard.id()}|">
+                                <option value="HIGH" th:selected="${hazard.riskLevelName() == 'HIGH'}">高</option>
+                                <option value="MEDIUM" th:selected="${hazard.riskLevelName() == 'MEDIUM'}">中</option>
+                                <option value="LOW" th:selected="${hazard.riskLevelName() == 'LOW'}">低</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">保存修改并确认</button>
+                    </form>
+                </details>
+
+                <details class="action-panel action-danger">
+                    <summary>驳回此结果</summary>
+                    <form method="post" class="stack" data-guard
+                          th:action="@{/hazards/{id}/confirm(id=${hazard.id()})}">
+                        <input type="hidden" name="action" value="REJECT">
+                        <div class="form-field">
+                            <label th:for="|reject-${hazard.id()}|">驳回理由（必填，不超过 200 字）</label>
+                            <textarea name="reviewNote" maxlength="200" th:id="|reject-${hazard.id()}|"
+                                      placeholder="例如：现场已核实，该区域临时堆放且不影响通行"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger">确认驳回</button>
+                    </form>
+                </details>
+            </div>
+
+            <div class="card-actions" th:if="${hazard.confirmed()}">
+                <a class="btn btn-primary" th:if="${hazard.canCreateWorkOrder()}"
+                   th:href="@{/workorders/new(hazardId=${hazard.id()})}">创建整改工单</a>
+                <span class="hint" th:unless="${hazard.canCreateWorkOrder()}">该风险已创建整改工单，请到工单列表查看进度。</span>
+                <a class="btn btn-secondary" th:href="@{/workorders}">查看工单列表</a>
+            </div>
+
+            <div class="card-actions" th:if="${hazard.rejected()}">
+                <p class="hint" th:if="${hazard.reviewNote() != null}"
+                   th:text="|驳回理由：${hazard.reviewNote()}|">驳回理由：</p>
+                <a class="btn btn-secondary" th:href="@{/inspections/new}">重新上传图片</a>
+            </div>
+        </article>
+    </section>
+</main>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
