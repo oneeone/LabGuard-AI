@@ -3,6 +3,9 @@ package com.labguard.service;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
 import com.labguard.model.Hazard;
+import com.labguard.model.RemediationContext;
+import com.labguard.model.RemediationReview;
+import com.labguard.model.ReviewOutcome;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -31,5 +34,20 @@ class DemoAiVisionServiceTest {
         assertThat(hazard.category()).contains("演示");
         assertThat(hazard.evidence()).contains("未调用真实视觉 API");
         assertThat(hazard.uncertainty()).contains("演示样例");
+    }
+
+    @Test
+    @DisplayName("A-19-10 演示复查固定 INCONCLUSIVE + DEMO，不伪装成通过")
+    void demoReviewIsInconclusiveDemo() {
+        DemoAiVisionService service = new DemoAiVisionService();
+        RemediationReview review = service.reviewRemediation(
+                ImageInput.of("fake".getBytes(StandardCharsets.UTF_8), "after.png"),
+                new RemediationContext("WO-1", "BLOCKED_EXIT", "移除杂物并保持通道畅通"));
+
+        assertThat(review.outcome()).isEqualTo(ReviewOutcome.INCONCLUSIVE);
+        assertThat(review.source()).isEqualTo(AiResultSource.DEMO);
+        assertThat(review.needsHumanReview()).isTrue();
+        assertThat(review.evidence()).contains("演示数据");
+        assertThat(review.suggestedAction()).contains("现场核验");
     }
 }

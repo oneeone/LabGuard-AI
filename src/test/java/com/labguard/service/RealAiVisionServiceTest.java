@@ -207,7 +207,8 @@ class RealAiVisionServiceTest {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(1))
                 .build();
-        return new RealAiVisionService(properties, new AiVisionResponseParser(mapper), mapper, client);
+        return new RealAiVisionService(properties,
+                new AiVisionResponseParser(mapper, new HazardReviewRules(properties)), mapper, client);
     }
 
     private ImageInput image() {

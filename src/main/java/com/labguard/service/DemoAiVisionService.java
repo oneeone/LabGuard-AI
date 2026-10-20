@@ -3,6 +3,9 @@ package com.labguard.service;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
 import com.labguard.model.Hazard;
+import com.labguard.model.RemediationContext;
+import com.labguard.model.RemediationReview;
+import com.labguard.model.ReviewOutcome;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -31,5 +34,25 @@ public class DemoAiVisionService implements AiVisionService {
                 true
         );
         return new AiAnalysisResult(List.of(hazard), AiResultSource.DEMO, "demo-sample", Instant.now(), null);
+    }
+
+    @Override
+    public RemediationReview reviewRemediation(ImageInput remediationImage, RemediationContext context) {
+        if (context == null) {
+            throw new AiVisionException(AiErrorType.REQUEST_FAILED, "复查上下文不能为空");
+        }
+        // 演示数据无法验证真实整改效果，固定返回 INCONCLUSIVE，绝不伪装成通过。
+        return new RemediationReview(
+                ReviewOutcome.INCONCLUSIVE,
+                "演示数据：未调用真实视觉 API，不能据此判断整改效果。",
+                List.of(),
+                "演示样例：仅用于验证复查流程，需人工现场确认。",
+                true,
+                "请接入真实视觉 API 或由人员现场核验工单 " + context.orderNo() + " 的整改结果。",
+                AiResultSource.DEMO,
+                "demo-sample",
+                Instant.now(),
+                null
+        );
     }
 }

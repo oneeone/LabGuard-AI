@@ -5,7 +5,7 @@ package com.labguard.service;
  */
 public enum AiErrorType {
     NOT_CONFIGURED("视觉 API 未配置完整，请配置 VISION_API_BASE_URL、VISION_API_KEY 和 VISION_MODEL。"),
-    UNSUPPORTED_IMAGE("仅支持 JPG、JPEG 或 PNG 图片。"),
+    UNSUPPORTED_IMAGE("仅支持 JPG、JPEG 或 PNG 图片，且单张大小不超过 10MB。"),
     TIMEOUT("视觉 API 请求超时，请检查网络或稍后重试。"),
     AUTH_FAILED("视觉 API 鉴权失败，请检查 API 密钥配置。"),
     RATE_LIMITED("视觉 API 调用过于频繁，请稍后重试。"),

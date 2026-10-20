@@ -16,7 +16,20 @@ class ImageInputTest {
         assertThatThrownBy(() -> ImageInput.of(bytes(), "lab.webp"))
                 .isInstanceOfSatisfying(AiVisionException.class, ex -> {
                     assertThat(ex.type()).isEqualTo(AiErrorType.UNSUPPORTED_IMAGE);
-                    assertThat(ex.getMessage()).isEqualTo("仅支持 JPG、JPEG 或 PNG 图片。");
+                    assertThat(ex.getMessage()).isEqualTo("仅支持 JPG、JPEG 或 PNG 图片，且单张大小不超过 10MB。");
+                });
+    }
+
+    @Test
+    @DisplayName("A-10 超出 10MB 大小限制在发送前返回 UNSUPPORTED_IMAGE")
+    void rejectsOversizedImage() {
+        byte[] oversized = new byte[10 * 1024 * 1024 + 1];
+        oversized[0] = 'x';
+
+        assertThatThrownBy(() -> ImageInput.of(oversized, "lab.png"))
+                .isInstanceOfSatisfying(AiVisionException.class, ex -> {
+                    assertThat(ex.type()).isEqualTo(AiErrorType.UNSUPPORTED_IMAGE);
+                    assertThat(ex.detail()).contains("图片大小超出限制");
                 });
     }
 

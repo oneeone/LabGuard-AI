@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
 import com.labguard.model.Hazard;
+import com.labguard.model.RemediationReview;
+import com.labguard.model.ReviewOutcome;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -18,8 +20,9 @@ import java.util.Map;
 
 /**
  * 视觉模型响应校验器：模型输出必须先通过这里，才能进入业务层。
- * 校验规则：hazards 必须是数组；每条风险必须有 category/location/evidence/suggestedAction；
+ * 结构校验：hazards 必须是数组；每条风险必须有 category/location/evidence/suggestedAction；
  * confidence 存在时必须是 0~1 的数字；needsHumanReview 存在时必须是布尔值。
+ * 通过结构校验后，再交给 {@link HazardReviewRules} 做人工核验规则与规范化。
  */
 @Component
 public class AiVisionResponseParser {
@@ -31,9 +34,11 @@ public class AiVisionResponseParser {
             Map.entry("high", "高"), Map.entry("medium", "中"), Map.entry("low", "低"));
 
     private final ObjectMapper mapper;
+    private final HazardReviewRules reviewRules;
 
-    public AiVisionResponseParser(ObjectMapper mapper) {
+    public AiVisionResponseParser(ObjectMapper mapper, HazardReviewRules reviewRules) {
         this.mapper = mapper;
+        this.reviewRules = reviewRules;
     }
 
     public AiAnalysisResult parse(String responseBody, String model) {
@@ -45,9 +50,50 @@ public class AiVisionResponseParser {
         }
         List<Hazard> hazards = new ArrayList<>();
         for (int i = 0; i < hazardsNode.size(); i++) {
-            hazards.add(parseHazard(hazardsNode.get(i), i));
+            hazards.add(reviewRules.apply(parseHazard(hazardsNode.get(i), i)));
         }
         return new AiAnalysisResult(hazards, AiResultSource.REAL, model, Instant.now(), responseBody);
+    }
+
+    /**
+     * 解析整改照片复查响应。契约：
+     * {"outcome":"PASSED|FAILED|INCONCLUSIVE","evidence":"...",
+     *  "remainingHazards":[...同 hazards 契约...],"uncertainty":"...","suggestedAction":"..."}
+     * outcome 缺失或非法取值一律 INVALID_RESPONSE，失败不会被当作通过。
+     */
+    public RemediationReview parseReview(String responseBody, String model) {
+        String payload = extractModelContent(responseBody);
+        JsonNode root = readJson(payload);
+        ReviewOutcome outcome = outcome(root.get("outcome"));
+        String evidence = optionalText(root, "evidence");
+        String uncertainty = optionalText(root, "uncertainty");
+        String suggestedAction = optionalText(root, "suggestedAction");
+        List<Hazard> remaining = new ArrayList<>();
+        JsonNode hazardsNode = root.get("remainingHazards");
+        if (hazardsNode != null && !hazardsNode.isNull()) {
+            if (!hazardsNode.isArray()) {
+                throw invalid("remainingHazards 必须是数组");
+            }
+            for (int i = 0; i < hazardsNode.size(); i++) {
+                remaining.add(reviewRules.apply(parseHazard(hazardsNode.get(i), i)));
+            }
+        }
+        if (outcome == ReviewOutcome.FAILED && remaining.isEmpty()) {
+            throw invalid("outcome=FAILED 但 remainingHazards 缺少仍可见的风险证据");
+        }
+        return new RemediationReview(outcome, evidence, remaining, uncertainty, true,
+                suggestedAction, AiResultSource.REAL, model, Instant.now(), responseBody);
+    }
+
+    private ReviewOutcome outcome(JsonNode node) {
+        if (node == null || !node.isTextual() || node.asText().isBlank()) {
+            throw invalid("响应缺少合法的 outcome 字段");
+        }
+        try {
+            return ReviewOutcome.valueOf(node.asText().trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw invalid("outcome 取值不合法：" + node.asText());
+        }
     }
 
     private String extractModelContent(String responseBody) {

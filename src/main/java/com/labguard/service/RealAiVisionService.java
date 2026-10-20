@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.labguard.model.AiAnalysisResult;
+import com.labguard.model.RemediationContext;
+import com.labguard.model.RemediationReview;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,14 @@ public class RealAiVisionService implements AiVisionService {
             没有可见风险时输出 {"hazards":[]}。
             """;
 
+    private static final String REVIEW_SYSTEM_PROMPT = """
+            你是实验室安全整改复查助手。给定一张整改后的现场照片和原风险上下文，只根据图片中可见的内容判断整改效果。
+            无法通过照片证明的事项必须输出 INCONCLUSIVE 并建议现场核验，不得给出确定结论。
+            只输出 JSON，不要输出解释或 Markdown 代码块，格式如下：
+            {"outcome":"PASSED|FAILED|INCONCLUSIVE","evidence":"判断依据的可见证据","remainingHazards":[{"category":"风险类别","riskLevel":"高|中|低","location":"画面中的位置","evidence":"图片中可见的证据","confidence":0.0,"uncertainty":"判断的不确定性","suggestedAction":"后续建议","needsHumanReview":true}],"uncertainty":"判断的不确定性","suggestedAction":"下一步建议"}
+            规则：outcome=PASSED 时必须填写可见证据；outcome=FAILED 时 remainingHazards 必须非空；拿不准时选 INCONCLUSIVE。
+            """;
+
     private final AiVisionProperties properties;
     private final AiVisionResponseParser parser;
     private final ObjectMapper mapper;
@@ -63,6 +73,21 @@ public class RealAiVisionService implements AiVisionService {
 
     @Override
     public AiAnalysisResult analyze(ImageInput image) {
+        String body = call(image, SYSTEM_PROMPT, "请分析这张实验室现场图片，并按 JSON 契约输出疑似风险。");
+        return parser.parse(body, properties.getModel());
+    }
+
+    @Override
+    public RemediationReview reviewRemediation(ImageInput remediationImage, RemediationContext context) {
+        if (context == null) {
+            throw new AiVisionException(AiErrorType.REQUEST_FAILED, "复查上下文不能为空");
+        }
+        String body = call(remediationImage, REVIEW_SYSTEM_PROMPT, reviewPromptText(context));
+        return parser.parseReview(body, properties.getModel());
+    }
+
+    /** 发送请求并返回响应体；所有配置/网络/HTTP 错误在这里统一映射为结构化异常。 */
+    private String call(ImageInput image, String systemPrompt, String userText) {
         if (!properties.complete()) {
             throw new AiVisionException(AiErrorType.NOT_CONFIGURED,
                     "缺少配置项：" + String.join("、", properties.missingConfiguration()));
@@ -73,7 +98,7 @@ public class RealAiVisionService implements AiVisionService {
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + properties.getApiKey().trim())
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody(image), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody(image, systemPrompt, userText), StandardCharsets.UTF_8))
                 .build();
 
         HttpResponse<String> response;
@@ -97,11 +122,29 @@ public class RealAiVisionService implements AiVisionService {
                 throw new AiVisionException(AiErrorType.INVALID_RESPONSE, "HTTP " + status + " 响应体为空");
             }
             log.info("视觉 API 调用成功，HTTP {}，模型={}", status, properties.getModel());
-            return parser.parse(body, properties.getModel());
+            return body;
         }
 
         log.warn("视觉 API 返回异常状态，HTTP {}", status);
         throw new AiVisionException(errorTypeFor(status), "HTTP " + status);
+    }
+
+    private String reviewPromptText(RemediationContext context) {
+        StringBuilder text = new StringBuilder("请对这张整改后的照片做复查，并按 JSON 契约输出。需要验证的整改上下文：\n");
+        text.append("工单编号：").append(context.orderNo().isBlank() ? "未提供" : context.orderNo()).append('\n');
+        text.append("原风险类别：").append(context.originalCategory()).append('\n');
+        if (!context.originalDescription().isBlank()) {
+            text.append("原风险描述：").append(context.originalDescription()).append('\n');
+        }
+        text.append("整改目标：").append(context.remediationGoal()).append('\n');
+        if (!context.originalSuggestedAction().isBlank()) {
+            text.append("原整改建议：").append(context.originalSuggestedAction()).append('\n');
+        }
+        if (!context.remediationNote().isBlank()) {
+            text.append("整改说明：").append(context.remediationNote()).append('\n');
+        }
+        text.append("请判断风险是否已被消除；无法从照片判断时输出 INCONCLUSIVE。");
+        return text.toString();
     }
 
     private URI endpoint() {
@@ -121,7 +164,7 @@ public class RealAiVisionService implements AiVisionService {
         }
     }
 
-    private String requestBody(ImageInput image) {
+    private String requestBody(ImageInput image, String systemPrompt, String userText) {
         ObjectNode root = mapper.createObjectNode();
         root.put("model", properties.getModel().trim());
         root.put("temperature", 0);
@@ -129,12 +172,12 @@ public class RealAiVisionService implements AiVisionService {
 
         ObjectNode system = messages.addObject();
         system.put("role", "system");
-        system.put("content", SYSTEM_PROMPT);
+        system.put("content", systemPrompt);
 
         ObjectNode user = messages.addObject();
         user.put("role", "user");
         ArrayNode content = user.putArray("content");
-        content.addObject().put("type", "text").put("text", "请分析这张实验室现场图片，并按 JSON 契约输出疑似风险。");
+        content.addObject().put("type", "text").put("text", userText);
         ObjectNode imagePart = content.addObject();
         imagePart.put("type", "image_url");
         imagePart.putObject("image_url").put("url", dataUrl(image));
