@@ -114,9 +114,29 @@
         </dl>
     </section>
 
+    <section class="card timeline-card" th:if="${!#lists.isEmpty(timeline)}">
+        <h2 class="card-title">处理时间线</h2>
+        <p class="hint">每次提交整改都会留下记录；退回后再次提交，历史仍保留在这里。</p>
+        <ol class="timeline">
+            <li class="timeline-item" th:each="entry : ${timeline}">
+                <div class="timeline-head">
+                    <span class="timeline-action" th:text="${entry.actionLabel()}">提交整改</span>
+                    <span class="timeline-time" th:text="${entry.timeText()}">2026-10-21 15:11</span>
+                </div>
+                <p class="timeline-meta">
+                    <span th:if="${!#strings.isEmpty(entry.statusText())}"
+                          th:text="${entry.statusText()}">待整改 → 待复查</span>
+                    <span th:text="${entry.operatorText()}">李四</span>
+                </p>
+                <p class="timeline-comment" th:if="${entry.commentText() != null}"
+                   th:text="${entry.commentText()}">已将纸箱移至货架</p>
+            </li>
+        </ol>
+    </section>
+
     <section class="card action-card" th:if="${canRemediate}">
-        <h2 class="card-title">提交整改</h2>
-        <p class="hint">整改说明与整改后照片是进入复查的必要证据，两者都必须提交。</p>
+        <h2 class="card-title">提交整改证据</h2>
+        <p class="hint">提交后工单进入待复查，需复查人对照前后照片核实后才会关闭；整改说明与整改后照片都必须提交。</p>
         <form th:action="@{/workorders/{id}/remediation(id=${order.id()})}" method="post"
               enctype="multipart/form-data" data-guard novalidate>
             <div class="form-field">

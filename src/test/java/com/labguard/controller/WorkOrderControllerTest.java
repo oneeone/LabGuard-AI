@@ -5,6 +5,7 @@ import com.labguard.model.WorkOrderStatus;
 import com.labguard.service.HazardService;
 import com.labguard.service.LocalFileStorage;
 import com.labguard.service.WorkOrderService;
+import com.labguard.service.WorkOrderTimelineService;
 import com.labguard.workflow.WorkflowException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,9 @@ class WorkOrderControllerTest {
 
     @MockitoBean
     private LocalFileStorage fileStorage;
+
+    @MockitoBean
+    private WorkOrderTimelineService timelineService;
 
     @Test
     @DisplayName("A4 正常创建：重定向到详情页并闪现成功提示")

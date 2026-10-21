@@ -7,6 +7,7 @@ import com.labguard.model.WorkOrderStatus;
 import com.labguard.service.HazardService;
 import com.labguard.service.LocalFileStorage;
 import com.labguard.service.WorkOrderService;
+import com.labguard.service.WorkOrderTimelineService;
 import com.labguard.web.ImageUploadValidator;
 import com.labguard.web.WebFormat;
 import com.labguard.web.form.WorkOrderForm;
@@ -46,13 +47,16 @@ public class WorkOrderController {
     private final WorkOrderService workOrderService;
     private final HazardService hazardService;
     private final LocalFileStorage fileStorage;
+    private final WorkOrderTimelineService timelineService;
 
     public WorkOrderController(WorkOrderService workOrderService,
                                HazardService hazardService,
-                               LocalFileStorage fileStorage) {
+                               LocalFileStorage fileStorage,
+                               WorkOrderTimelineService timelineService) {
         this.workOrderService = workOrderService;
         this.hazardService = hazardService;
         this.fileStorage = fileStorage;
+        this.timelineService = timelineService;
     }
 
     /** R6 工单列表，status 为空表示全部。 */
@@ -147,6 +151,7 @@ public class WorkOrderController {
         model.addAttribute("reviewedAtText", WebFormat.dateTime(detail.order().reviewedAt()));
         model.addAttribute("reviewResultLabel", reviewResultLabel(status, detail.order().reviewedAt()));
         model.addAttribute("inspectedAtText", WebFormat.dateTime(detail.inspection().inspectedAt()));
+        model.addAttribute("timeline", timelineService.entriesFor(workOrderId));
         model.addAttribute("maxRemediationNote", MAX_REMEDIATION_NOTE);
         model.addAttribute("maxReviewComment", MAX_REVIEW_COMMENT);
         return "workorder-detail";

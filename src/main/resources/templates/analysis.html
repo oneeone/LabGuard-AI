@@ -175,6 +175,8 @@
                         <button type="submit" class="btn btn-danger">确认驳回</button>
                     </form>
                 </details>
+
+                <a class="btn-link" th:href="@{/inspections/new}">照片有误？重新上传</a>
             </div>
 
             <div class="card-actions" th:if="${hazard.confirmed()}">

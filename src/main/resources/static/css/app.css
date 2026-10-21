@@ -796,6 +796,74 @@ a {
     line-height: 1;
 }
 
+/* ---------- 处理时间线 ---------- */
+
+.timeline-card {
+    margin-top: var(--space-5);
+}
+
+.timeline {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.timeline-item {
+    position: relative;
+    padding: 0 0 var(--space-4) var(--space-4);
+    border-left: 2px solid var(--color-border);
+}
+
+.timeline-item:last-child {
+    padding-bottom: 0;
+    border-left-color: transparent;
+}
+
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: -6px;
+    width: 10px;
+    height: 10px;
+    background: var(--color-primary);
+    border-radius: 50%;
+}
+
+.timeline-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.timeline-action {
+    font-weight: 600;
+}
+
+.timeline-time {
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.timeline-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.timeline-comment {
+    margin: var(--space-2) 0 0;
+    padding: var(--space-2) var(--space-3);
+    background: #fafbfc;
+    border-radius: var(--radius-sm);
+    overflow-wrap: anywhere;
+}
+
 @media (max-width: 720px) {
     .inspection-grid,
     .compare-grid {

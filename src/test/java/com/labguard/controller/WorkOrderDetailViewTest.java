@@ -1,9 +1,12 @@
 package com.labguard.controller;
 
+import com.labguard.model.AuditEvent;
 import com.labguard.model.WorkOrderStatus;
 import com.labguard.service.HazardService;
 import com.labguard.service.LocalFileStorage;
 import com.labguard.service.WorkOrderService;
+import com.labguard.service.WorkOrderTimelineService;
+import com.labguard.web.view.TimelineEntry;
 import com.labguard.workflow.WorkflowException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -37,6 +42,9 @@ class WorkOrderDetailViewTest {
 
     @MockitoBean
     private LocalFileStorage fileStorage;
+
+    @MockitoBean
+    private WorkOrderTimelineService timelineService;
 
     @Test
     @DisplayName("A7 待整改详情页：只有提交整改")
@@ -95,6 +103,35 @@ class WorkOrderDetailViewTest {
                 .andExpect(content().string(containsString("/uploads/original.jpg")))
                 .andExpect(content().string(containsString("/uploads/after.jpg")))
                 .andExpect(content().string(containsString("已清理纸箱")));
+    }
+
+    @Test
+    @DisplayName("附录 E 处理时间线：展示历史动作与当次整改说明")
+    void timelineShowsHistoryAndRemediationNotes() throws Exception {
+        given(workOrderService.detail(TestFixtures.WORK_ORDER_ID))
+                .willReturn(TestFixtures.detail(WorkOrderStatus.PENDING_REVIEW));
+        AuditEvent submitEvent = AuditEvent.of(AuditEvent.ENTITY_WORK_ORDER, TestFixtures.WORK_ORDER_ID,
+                "SUBMIT_REMEDIATION", "PENDING_REMEDIATION", "PENDING_REVIEW", "李四",
+                "提交整改", "{\"remediationNote\":\"第一次整改后又出现堆放\"}");
+        given(timelineService.entriesFor(TestFixtures.WORK_ORDER_ID))
+                .willReturn(List.of(TimelineEntry.of(submitEvent, "第一次整改后又出现堆放")));
+
+        mockMvc.perform(get("/workorders/{id}", TestFixtures.WORK_ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("处理时间线")))
+                .andExpect(content().string(containsString("待整改 → 待复查")))
+                .andExpect(content().string(containsString("第一次整改后又出现堆放")));
+    }
+
+    @Test
+    @DisplayName("附录 E 无历史记录时不渲染时间线区块")
+    void emptyTimelineHidesSection() throws Exception {
+        given(workOrderService.detail(TestFixtures.WORK_ORDER_ID))
+                .willReturn(TestFixtures.detail(WorkOrderStatus.PENDING_REMEDIATION));
+
+        mockMvc.perform(get("/workorders/{id}", TestFixtures.WORK_ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("处理时间线"))));
     }
 
     @Test
