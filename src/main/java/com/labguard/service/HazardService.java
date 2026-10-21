@@ -105,6 +105,12 @@ public class HazardService {
         return hazardRepository.findByInspectionId(inspectionId);
     }
 
+    /** 某个隐患的处理时间线，供 C 的详情页展示。 */
+    public List<AuditEvent> timeline(long hazardId) {
+        requireHazard(hazardId);
+        return auditEventRepository.findByEntity(AuditEvent.ENTITY_HAZARD, hazardId);
+    }
+
     private void applyConfirm(Hazard hazard, String operator, WorkflowAction action, String comment) {
         LocalDateTime now = LocalDateTime.now();
         int updated = hazardRepository.confirm(hazard, operator, now);

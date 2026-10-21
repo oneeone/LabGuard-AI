@@ -169,6 +169,12 @@ public class WorkOrderService {
         return workOrderRepository.existsByHazardId(hazardId);
     }
 
+    /** 某张工单的处理时间线，供 C 的详情页展示。 */
+    public List<AuditEvent> timeline(long workOrderId) {
+        requireOrder(workOrderId);
+        return auditEventRepository.findByEntity(AuditEvent.ENTITY_WORK_ORDER, workOrderId);
+    }
+
     private WorkOrder requireOrder(long workOrderId) {
         return workOrderRepository.findById(workOrderId)
                 .orElseThrow(() -> new WorkflowException(

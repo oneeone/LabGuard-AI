@@ -187,6 +187,7 @@ void edit(long hazardId, HazardEditCommand command, String operator);
 void reject(long hazardId, String reviewNote, String operator);
 Hazard get(long hazardId);
 List<Hazard> listByInspection(long inspectionId);
+List<AuditEvent> timeline(long hazardId);
 ```
 
 ### 4.2 WorkOrderService
@@ -197,6 +198,7 @@ void submitRemediation(long workOrderId, String remediationNote, String afterIma
 void review(long workOrderId, boolean passed, String reviewComment, String operator);
 WorkOrderDetail detail(long workOrderId);
 List<WorkOrderDetail> list(WorkOrderStatus status);   // status 为 null 表示全部
+List<AuditEvent> timeline(long workOrderId);
 ```
 
 ### 4.3 InspectionService
@@ -209,6 +211,7 @@ void recordAnalysisFailure(long inspectionId, String rawResponse);
 Inspection get(long inspectionId);
 List<Inspection> list();
 List<Hazard> listHazards(long inspectionId);
+List<AuditEvent> timeline(long inspectionId);
 ```
 
 只接收分析结果的字段（来源、原始响应、隐患列表），**不依赖 A 的结果类型**，由调用方从各自的分析结果中取值传入。
@@ -280,7 +283,8 @@ List<Hazard> listHazards(long inspectionId);
 | `WorkOrderStateMachineTest` | 3×3 全部状态组合：4 条合法路径通过，5 条非法路径抛异常，转换表只读 | 纯逻辑，无 DB |
 | `HazardStateMachineTest` | 隐患 3 状态合法/非法转换 | 纯逻辑，无 DB |
 | `WorkflowPersistenceTest` | 四表完整链路、重复确认返回 0 行、整改+复查+审计、数据落到文件后换连接可读 | 文件型 SQLite |
-| Service 业务规则测试 | 未确认建单被拒、重复建单被拒、无整改证据被拒、CLOSED 后操作被拒 | 待补（需 Spring 上下文） |
+| `WorkOrderServiceTest` | 未确认建单被拒、重复建单被拒、无照片提交被拒、复查退回无意见被拒、关闭后再提交被拒、三条审计顺序 | 文件型 SQLite + Spring 上下文 |
+| `HazardServiceTest` | 确认写审计、重复确认被拒、驳回需理由、驳回后不可确认、修改后来源变 MANUAL | 文件型 SQLite + Spring 上下文 |
 
 持久化测试使用文件型 `jdbc:sqlite:target/workflow-persistence.db`，**不使用内存库**，以验证“重启后数据保留”。
 

@@ -120,6 +120,12 @@ public class InspectionService {
         return hazardRepository.findByInspectionId(inspectionId);
     }
 
+    /** 一次巡检的处理时间线，供 C 的详情页展示。 */
+    public List<AuditEvent> timeline(long inspectionId) {
+        requireInspection(inspectionId);
+        return auditEventRepository.findByEntity(AuditEvent.ENTITY_INSPECTION, inspectionId);
+    }
+
     private Inspection requireInspection(long inspectionId) {
         return inspectionRepository.findById(inspectionId)
                 .orElseThrow(() -> new WorkflowException(
