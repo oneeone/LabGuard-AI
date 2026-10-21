@@ -2,7 +2,7 @@ package com.labguard.service;
 
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
-import com.labguard.model.Hazard;
+import com.labguard.model.HazardItem;
 import com.labguard.model.RemediationContext;
 import com.labguard.model.RemediationReview;
 import com.labguard.model.ReviewOutcome;
@@ -28,7 +28,7 @@ class DemoAiVisionServiceTest {
         assertThat(result.analyzedAt()).isNotNull();
         assertThat(result.hazards()).hasSize(1);
 
-        Hazard hazard = result.hazards().get(0);
+        HazardItem hazard = result.hazards().get(0);
         assertThat(hazard.demoData()).isTrue();
         assertThat(hazard.needsHumanReview()).isTrue();
         assertThat(hazard.category()).contains("演示");

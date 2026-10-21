@@ -7,7 +7,7 @@ import java.util.List;
  * 一次视觉分析的结果。source 必须随结果一起流转，页面和数据记录都要能读取。
  */
 public record AiAnalysisResult(
-        List<Hazard> hazards,
+        List<HazardItem> hazards,
         AiResultSource source,
         String model,
         Instant analyzedAt,

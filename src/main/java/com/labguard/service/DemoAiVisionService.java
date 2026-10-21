@@ -2,7 +2,7 @@ package com.labguard.service;
 
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
-import com.labguard.model.Hazard;
+import com.labguard.model.HazardItem;
 import com.labguard.model.RemediationContext;
 import com.labguard.model.RemediationReview;
 import com.labguard.model.ReviewOutcome;
@@ -22,7 +22,7 @@ public class DemoAiVisionService implements AiVisionService {
 
     @Override
     public AiAnalysisResult analyze(ImageInput image) {
-        Hazard hazard = new Hazard(
+        HazardItem hazard = new HazardItem(
                 "通道疑似被物品阻挡（演示样例）",
                 "中",
                 "图片中的通道区域（示例）",

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
-import com.labguard.model.Hazard;
+import com.labguard.model.HazardItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +27,7 @@ class AiVisionResponseParserTest {
 
         assertThat(result.source()).isEqualTo(AiResultSource.REAL);
         assertThat(result.hazards()).hasSize(1);
-        Hazard hazard = result.hazards().get(0);
+        HazardItem hazard = result.hazards().get(0);
         assertThat(hazard.category()).isEqualTo("BLOCKED_EXIT");
         assertThat(hazard.riskLevel()).isEqualTo("高");
         assertThat(hazard.location()).isEqualTo("画面左侧安全出口前");
@@ -123,7 +123,7 @@ class AiVisionResponseParserTest {
         hazard.put("uncertainty", "");
         hazard.put("needsHumanReview", true);
 
-        Hazard result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
+        HazardItem result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
 
         assertThat(result.needsHumanReview()).isTrue();
     }
@@ -136,7 +136,7 @@ class AiVisionResponseParserTest {
         hazard.put("uncertainty", "");
         hazard.put("needsHumanReview", false);
 
-        Hazard result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
+        HazardItem result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
 
         assertThat(result.needsHumanReview()).isTrue();
         assertThat(result.reviewReasons()).anyMatch(reason -> reason.contains("低置信度"));
@@ -151,7 +151,7 @@ class AiVisionResponseParserTest {
         hazard.put("confidence", 0.95);
         hazard.put("needsHumanReview", false);
 
-        Hazard result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
+        HazardItem result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
 
         assertThat(result.needsHumanReview()).isTrue();
         assertThat(result.evidenceSufficient()).isFalse();
@@ -166,7 +166,7 @@ class AiVisionResponseParserTest {
         hazard.put("confidence", 0.95);
         hazard.put("needsHumanReview", false);
 
-        Hazard result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
+        HazardItem result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
 
         assertThat(result.uncertainty()).isEqualTo("画面清晰度较低，无法确认是否堵住出口");
         assertThat(result.needsHumanReview()).isTrue();
@@ -182,7 +182,7 @@ class AiVisionResponseParserTest {
         hazard.put("confidence", 0.95);
         hazard.put("needsHumanReview", false);
 
-        Hazard result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
+        HazardItem result = parser.parse(envelope(contract(hazard)), "m").hazards().get(0);
 
         assertThat(result.category()).isEqualTo("MYSTERY_THING");
         assertThat(result.needsHumanReview()).isTrue();
@@ -193,7 +193,7 @@ class AiVisionResponseParserTest {
         known.put("uncertainty", "");
         known.put("confidence", 0.95);
         known.put("needsHumanReview", false);
-        Hazard knownResult = parser.parse(envelope(contract(known)), "m").hazards().get(0);
+        HazardItem knownResult = parser.parse(envelope(contract(known)), "m").hazards().get(0);
         assertThat(knownResult.category()).isEqualTo("BLOCKED_EXIT");
         assertThat(knownResult.needsHumanReview()).isFalse();
     }

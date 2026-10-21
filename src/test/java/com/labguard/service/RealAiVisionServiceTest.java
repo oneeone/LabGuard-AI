@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
-import com.labguard.model.Hazard;
+import com.labguard.model.HazardItem;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -149,7 +149,7 @@ class RealAiVisionServiceTest {
 
         assertThat(result.source()).isEqualTo(AiResultSource.REAL);
         assertThat(result.hazards()).hasSize(1);
-        Hazard hazard = result.hazards().get(0);
+        HazardItem hazard = result.hazards().get(0);
         assertThat(hazard.category()).isEqualTo("BLOCKED_EXIT");
         assertThat(hazard.riskLevel()).isEqualTo("高");
         assertThat(hazard.needsHumanReview()).isTrue();

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
-import com.labguard.model.Hazard;
+import com.labguard.model.HazardItem;
 import com.labguard.model.RemediationReview;
 import com.labguard.model.ReviewOutcome;
 import org.slf4j.Logger;
@@ -48,7 +48,7 @@ public class AiVisionResponseParser {
         if (hazardsNode == null || !hazardsNode.isArray()) {
             throw invalid("响应缺少 hazards 数组");
         }
-        List<Hazard> hazards = new ArrayList<>();
+        List<HazardItem> hazards = new ArrayList<>();
         for (int i = 0; i < hazardsNode.size(); i++) {
             hazards.add(reviewRules.apply(parseHazard(hazardsNode.get(i), i)));
         }
@@ -68,7 +68,7 @@ public class AiVisionResponseParser {
         String evidence = optionalText(root, "evidence");
         String uncertainty = optionalText(root, "uncertainty");
         String suggestedAction = optionalText(root, "suggestedAction");
-        List<Hazard> remaining = new ArrayList<>();
+        List<HazardItem> remaining = new ArrayList<>();
         JsonNode hazardsNode = root.get("remainingHazards");
         if (hazardsNode != null && !hazardsNode.isNull()) {
             if (!hazardsNode.isArray()) {
@@ -115,7 +115,7 @@ public class AiVisionResponseParser {
         throw invalid("响应缺少 choices 或 hazards 字段");
     }
 
-    private Hazard parseHazard(JsonNode node, int index) {
+    private HazardItem parseHazard(JsonNode node, int index) {
         if (node == null || !node.isObject()) {
             throw invalid("第 " + (index + 1) + " 条风险不是 JSON 对象");
         }
@@ -127,7 +127,7 @@ public class AiVisionResponseParser {
         String uncertainty = optionalText(node, "uncertainty");
         String riskLevel = riskLevel(node, index);
         boolean needsHumanReview = needsHumanReview(node, index);
-        return new Hazard(category, riskLevel, location, evidence, confidence, uncertainty,
+        return new HazardItem(category, riskLevel, location, evidence, confidence, uncertainty,
                 suggestedAction, needsHumanReview, false);
     }
 

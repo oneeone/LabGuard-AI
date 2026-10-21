@@ -1,6 +1,6 @@
 package com.labguard.service;
 
-import com.labguard.model.Hazard;
+import com.labguard.model.HazardItem;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public class HazardReviewRules {
         this.properties = properties;
     }
 
-    public Hazard apply(Hazard hazard) {
+    public HazardItem apply(HazardItem hazard) {
         List<String> reasons = new ArrayList<>(hazard.reviewReasons());
         boolean needsHumanReview = hazard.needsHumanReview();
         boolean evidenceSufficient = isNotBlank(hazard.evidence())
@@ -54,7 +54,7 @@ public class HazardReviewRules {
             reasons.add("未知风险类别，未被白名单识别：" + category);
         }
 
-        return new Hazard(category, hazard.riskLevel(), hazard.location(), hazard.evidence(),
+        return new HazardItem(category, hazard.riskLevel(), hazard.location(), hazard.evidence(),
                 hazard.confidence(), hazard.uncertainty(), hazard.suggestedAction(),
                 needsHumanReview, hazard.demoData(), reasons, evidenceSufficient);
     }

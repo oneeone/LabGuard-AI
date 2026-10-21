@@ -11,7 +11,7 @@ import java.util.List;
  * - reviewReasons 记录触发人工核验的原因（低置信度 / 证据不足 / 不确定性等）；
  * - evidenceSufficient 表示可见证据是否足以支持该风险判断。
  */
-public record Hazard(
+public record HazardItem(
         String category,
         String riskLevel,
         String location,
@@ -24,12 +24,12 @@ public record Hazard(
         List<String> reviewReasons,
         boolean evidenceSufficient
 ) {
-    public Hazard {
+    public HazardItem {
         reviewReasons = reviewReasons == null ? List.of() : List.copyOf(reviewReasons);
     }
 
     /** 兼容旧调用方（Controller / 工单 / 演示样例）：核验原因由规则器补全。 */
-    public Hazard(String category, String riskLevel, String location, String evidence,
+    public HazardItem(String category, String riskLevel, String location, String evidence,
                   Double confidence, String uncertainty, String suggestedAction,
                   boolean needsHumanReview, boolean demoData) {
         this(category, riskLevel, location, evidence, confidence, uncertainty, suggestedAction,

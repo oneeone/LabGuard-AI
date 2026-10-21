@@ -14,7 +14,7 @@ import java.util.List;
 public record RemediationReview(
         ReviewOutcome outcome,
         String evidence,
-        List<Hazard> remainingHazards,
+        List<HazardItem> remainingHazards,
         String uncertainty,
         boolean needsHumanReview,
         String suggestedAction,
