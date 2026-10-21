@@ -7,7 +7,9 @@ public enum RiskLevel {
 
     HIGH("高"),
     MEDIUM("中"),
-    LOW("低");
+    LOW("低"),
+    /** AI 未能给出等级建议（“待评估”），由人工确认时调整。 */
+    UNKNOWN("待评估");
 
     private final String label;
 

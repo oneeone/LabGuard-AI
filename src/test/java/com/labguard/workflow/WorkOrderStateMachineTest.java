@@ -78,11 +78,11 @@ class WorkOrderStateMachineTest {
     }
 
     @Test
-    @DisplayName("合法转换集合与文档一致：共 4 条")
+    @DisplayName("合法转换集合与分工计划一致：共 3 条（待整改→待复查、待复查→已关闭、待复查→退回待整改）")
     void allowedTransitionCount() {
         int count = WorkOrderStateMachine.allowedTransitions()
                 .values().stream().mapToInt(Set::size).sum();
-        assertEquals(4, count);
+        assertEquals(3, count);
     }
 
     @Test

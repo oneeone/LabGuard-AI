@@ -24,7 +24,7 @@ import java.util.List;
  * 分析完成后回写状态与原始响应，并把隐患批量保存为待确认。
  */
 @Service
-public class InspectionService {
+public class InspectionRecordService {
 
     private static final String SYSTEM_OPERATOR = "system";
 
@@ -32,7 +32,7 @@ public class InspectionService {
     private final HazardRepository hazardRepository;
     private final AuditEventRepository auditEventRepository;
 
-    public InspectionService(InspectionRepository inspectionRepository,
+    public InspectionRecordService(InspectionRepository inspectionRepository,
                              HazardRepository hazardRepository,
                              AuditEventRepository auditEventRepository) {
         this.inspectionRepository = inspectionRepository;
