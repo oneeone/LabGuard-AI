@@ -199,7 +199,21 @@ WorkOrderDetail detail(long workOrderId);
 List<WorkOrderDetail> list(WorkOrderStatus status);   // status 为 null 表示全部
 ```
 
-### 4.3 与 C 契约路由的对应
+### 4.3 InspectionService
+
+```java
+long create(Inspection inspection);
+List<Long> recordAnalysisResult(long inspectionId, AiResultSource source,
+                                String rawResponse, List<Hazard> hazards);
+void recordAnalysisFailure(long inspectionId, String rawResponse);
+Inspection get(long inspectionId);
+List<Inspection> list();
+List<Hazard> listHazards(long inspectionId);
+```
+
+只接收分析结果的字段（来源、原始响应、隐患列表），**不依赖 A 的结果类型**，由调用方从各自的分析结果中取值传入。
+
+### 4.4 与 C 契约路由的对应
 
 | C 契约路由 | 调用的 Service 方法 |
 |---|---|
@@ -211,7 +225,7 @@ List<WorkOrderDetail> list(WorkOrderStatus status);   // status 为 null 表示�
 | R6 `GET /workorders` | `workOrderService.list(status)` |
 | R9 `GET /workorders/{id}` | `workOrderService.detail(id)` |
 
-### 4.4 视图对象
+### 4.5 视图对象
 
 - `WorkOrderDetail`：工单 + 关联隐患 + 关联巡检（含原图路径、实验室名、整改前后照片、复查信息）
 - 页面渲染所需字段全部由该视图提供，模板不额外查询数据库
@@ -257,18 +271,20 @@ List<WorkOrderDetail> list(WorkOrderStatus status);   // status 为 null 表示�
 3. `WorkOrderService.findAll()` 由 `list(WorkOrderStatus)` 取代。
 4. 若 A 的 `HomeController` 是临时脚手架、最终由 C 的 Controller 替换，则以上变更只需在合并时同步一次。
 
-## 7. 测试计划
+**B 分支不合并 A，也不修改上述任何非 B 文件**；以上影响由集成方在合并时统一处理。
+
+## 7. 测试现状
 
 | 测试类 | 覆盖内容 | 依赖 |
 |---|---|---|
-| `WorkOrderStateMachineTest` | 3×3 全部状态组合：4 条合法路径通过，5 条非法路径抛异常 | 纯逻辑，无 DB |
-| `HazardStatusTest` | Hazard 3 状态合法/非法转换 | 纯逻辑，无 DB |
-| `InspectionRepositoryTest` | 建表、插入取回主键、按 id 查询、重启后数据存在 | 文件型 SQLite |
-| `HazardRepositoryTest` | 批量插入、按巡检查询、条件更新受影响行数 | 文件型 SQLite |
-| `WorkOrderRepositoryTest` | 插入、关联查询、`hazard_id` 唯一约束、条件更新 | 文件型 SQLite |
-| `WorkOrderServiceTest` | 未确认建单被拒、重复建单被拒、无整改证据被拒、CLOSED 后操作被拒、审计记录写入 | 文件型 SQLite + Spring Context |
+| `WorkOrderStateMachineTest` | 3×3 全部状态组合：4 条合法路径通过，5 条非法路径抛异常，转换表只读 | 纯逻辑，无 DB |
+| `HazardStateMachineTest` | 隐患 3 状态合法/非法转换 | 纯逻辑，无 DB |
+| `WorkflowPersistenceTest` | 四表完整链路、重复确认返回 0 行、整改+复查+审计、数据落到文件后换连接可读 | 文件型 SQLite |
+| Service 业务规则测试 | 未确认建单被拒、重复建单被拒、无整改证据被拒、CLOSED 后操作被拒 | 待补（需 Spring 上下文） |
 
-持久化测试一律使用文件型数据库（如 `jdbc:sqlite:./target/test-db/labguard-test.db`），**不使用内存库**，以验证"重启后数据保留"。
+持久化测试使用文件型 `jdbc:sqlite:target/workflow-persistence.db`，**不使用内存库**，以验证“重启后数据保留”。
+
+model 与 workflow 层已用 `javac` 编译验证通过；repository / service 层因本机无 Maven 及 Spring 依赖缓存，尚未实际执行 `mvn test`。
 
 ## 8. 待确认事项
 
@@ -279,3 +295,17 @@ List<WorkOrderDetail> list(WorkOrderStatus status);   // status 为 null 表示�
 | 3 | 整改照片路径由 D 的存储规则生成，B 只存字符串 | D |
 | 4 | 工单详情页是否展示审计时间线 | C |
 | 5 | `PRAGMA foreign_keys = ON` 的配置位置 | D |
+
+## 9. 交付清单（B 部分）
+
+| 交付物 | 文件 |
+|---|---|
+| SQLite 四表 schema（草案，待集成时迁入 resources） | `_docs/B模块-schema.sql` |
+| 领域模型 | `model/` 下 Hazard、Inspection、WorkOrder、WorkOrderDetail、AuditEvent 及 4 个枚举 |
+| 状态机 | `workflow/` 下 HazardStateMachine、WorkOrderStateMachine、WorkflowAction、WorkflowException |
+| 仓储层 | `repository/` 下 Inspection、Hazard、WorkOrder、AuditEvent 四个仓储与 RowValues |
+| 业务层 | `service/` 下 InspectionService、HazardService、WorkOrderService、HazardEditCommand |
+| 测试 | `workflow/HazardStateMachineTest`、`workflow/WorkOrderStateMachineTest`、`repository/WorkflowPersistenceTest` |
+| 设计文档 | `_docs/B模块-设计契约.md` |
+
+边界说明：以上文件均属于 B；`pom.xml`、`application.properties`、`resources/schema.sql`、`templates/`、`controller/` 由 A / C / D 负责，B 不做修改。

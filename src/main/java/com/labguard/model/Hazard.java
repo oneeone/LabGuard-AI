@@ -33,4 +33,11 @@ public record Hazard(
                 location, evidence, confidence, uncertainty, suggestedAction, needsHumanReview,
                 HazardStatus.PENDING_CONFIRM, null, null, null, LocalDateTime.now());
     }
+
+    /** 落库前补齐所属巡检，主键与确认信息重置。 */
+    public Hazard bindTo(long inspectionId) {
+        return new Hazard(0L, inspectionId, category, riskLevel, riskLevelSource, location,
+                evidence, confidence, uncertainty, suggestedAction, needsHumanReview,
+                HazardStatus.PENDING_CONFIRM, null, null, null, createdAt);
+    }
 }
