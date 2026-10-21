@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="|工单 #${order.id()} · LabGuard AI|">工单详情 · LabGuard AI</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page page-wide">
+    <nav class="topnav">
+        <a th:href="@{/inspections/new}">新建巡检</a>
+        <a th:href="@{/workorders}">整改工单</a>
+    </nav>
+
+    <header class="page-header">
+        <h1 th:text="|整改工单 #${order.id()}|">整改工单 #1</h1>
+        <p class="headline-meta">
+            <span class="badge badge-status" th:classappend="'status-' + ${statusClass}"
+                  th:text="${statusLabel}">待整改</span>
+            <span class="badge badge-overdue" th:if="${row.overdue()}">已超期</span>
+            <span class="hint" th:unless="${row.overdue()}">截止日期 <span th:text="${dueDateText}">2026-10-25</span></span>
+            <span class="hint">关联隐患 <span th:text="|#${hazard.id()}|">#1</span></span>
+            <a class="btn-link" th:href="@{/inspections/{id}/analysis(id=${inspection.id()})}">查看分析结果</a>
+        </p>
+    </header>
+
+    <div class="alert alert-success" th:if="${detailMessage}" th:text="${detailMessage}"></div>
+    <div class="alert alert-error" th:if="${detailError}" th:text="${detailError}"></div>
+
+    <section class="card">
+        <h2 class="card-title">基本信息</h2>
+        <dl class="info-list info-list-columns">
+            <div><dt>工单编号</dt><dd th:text="|#${order.id()}|">#1</dd></div>
+            <div><dt>关联隐患编号</dt><dd th:text="|#${hazard.id()}|">#1</dd></div>
+            <div><dt>实验室</dt><dd th:text="${inspection.labName()}">化学实验楼 A302</dd></div>
+            <div><dt>责任人</dt><dd th:text="${order.assignee()}">李四</dd></div>
+            <div><dt>截止日期</dt>
+                <dd>
+                    <span th:text="${dueDateText}">2026-10-25</span>
+                    <span class="badge badge-overdue" th:if="${row.overdue()}">已超期</span>
+                </dd>
+            </div>
+            <div><dt>创建时间</dt><dd th:text="${createdAtText}">2026-10-20 10:00</dd></div>
+            <div><dt>最近更新</dt><dd th:text="${updatedAtText}">2026-10-20 10:00</dd></div>
+            <div><dt>备注</dt><dd th:text="${order.note() != null ? order.note() : '—'}">—</dd></div>
+        </dl>
+    </section>
+
+    <section class="compare-section">
+        <h2>整改前后对比</h2>
+        <p class="hint">左侧为巡检时的原始证据，右侧为责任人提交的最新一次整改证据。</p>
+        <div class="compare-grid">
+            <article class="card compare-col">
+                <h3>整改前</h3>
+                <figure class="compare-figure">
+                    <a th:href="${inspection.imagePath()}" target="_blank" rel="noopener">
+                        <img th:src="${inspection.imagePath()}" alt="巡检原图">
+                    </a>
+                    <figcaption th:text="|巡检时间：${inspectedAtText}|">巡检时间：2026-10-20 10:00</figcaption>
+                </figure>
+                <dl class="info-list">
+                    <div><dt>风险类别</dt><dd th:text="${hazard.category()}">通道被遮挡</dd></div>
+                    <div><dt>建议风险等级</dt>
+                        <dd>
+                            <span class="badge badge-risk" th:classappend="'risk-' + ${hazard.riskLevelClass()}"
+                                  th:text="${hazard.riskLevelLabel()}">中</span>
+                        </dd>
+                    </div>
+                    <div><dt>位置</dt><dd th:text="${hazard.location()}">位置未说明</dd></div>
+                    <div><dt>可见证据</dt><dd th:text="${hazard.evidence()}">无可见证据</dd></div>
+                </dl>
+            </article>
+
+            <article class="card compare-col">
+                <h3>整改后</h3>
+                <th:block th:if="${order.afterImagePath() != null}">
+                    <figure class="compare-figure">
+                        <a th:href="${order.afterImagePath()}" target="_blank" rel="noopener">
+                            <img th:src="${order.afterImagePath()}" alt="整改后照片">
+                        </a>
+                        <figcaption th:text="|提交时间：${updatedAtText}|">提交时间：2026-10-20 10:00</figcaption>
+                    </figure>
+                    <div class="evidence-box">
+                        <span class="label">整改说明</span>
+                        <p th:text="${order.remediationNote()}">已清理通道杂物。</p>
+                    </div>
+                </th:block>
+                <div class="compare-empty" th:unless="${order.afterImagePath() != null}">
+                    <p>尚未提交整改证据</p>
+                    <p class="hint">责任人提交整改说明与整改后照片后，将在此展示。</p>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">复查记录</h2>
+        <div class="empty-state" th:if="${order.reviewedAt() == null}">
+            尚未复查。责任人提交整改后，工单进入待复查状态。
+        </div>
+        <dl class="info-list info-list-columns" th:unless="${order.reviewedAt() == null}">
+            <div><dt>复查结论</dt>
+                <dd>
+                    <span class="badge badge-review" th:classappend="${closed} ? 'review-pass' : 'review-return'"
+                          th:text="${reviewResultLabel}">通过</span>
+                </dd>
+            </div>
+            <div><dt>复查时间</dt><dd th:text="${reviewedAtText}">2026-10-21 09:00</dd></div>
+            <div><dt>复查人</dt><dd th:text="${order.reviewedBy() != null ? order.reviewedBy() : '—'}">复查员</dd></div>
+            <div class="span-all"><dt>复查意见</dt>
+                <dd th:text="${order.reviewComment() != null ? order.reviewComment() : '—'}">—</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="card timeline-card" th:if="${!#lists.isEmpty(timeline)}">
+        <h2 class="card-title">处理时间线</h2>
+        <p class="hint">每次提交整改都会留下记录；退回后再次提交，历史仍保留在这里。</p>
+        <ol class="timeline">
+            <li class="timeline-item" th:each="entry : ${timeline}">
+                <div class="timeline-head">
+                    <span class="timeline-action" th:text="${entry.actionLabel()}">提交整改</span>
+                    <span class="timeline-time" th:text="${entry.timeText()}">2026-10-21 15:11</span>
+                </div>
+                <p class="timeline-meta">
+                    <span th:if="${!#strings.isEmpty(entry.statusText())}"
+                          th:text="${entry.statusText()}">待整改 → 待复查</span>
+                    <span th:text="${entry.operatorText()}">李四</span>
+                </p>
+                <p class="timeline-comment" th:if="${entry.commentText() != null}"
+                   th:text="${entry.commentText()}">已将纸箱移至货架</p>
+            </li>
+        </ol>
+    </section>
+
+    <section class="card action-card" th:if="${canRemediate}">
+        <h2 class="card-title">提交整改证据</h2>
+        <p class="hint">提交后工单进入待复查，需复查人对照前后照片核实后才会关闭；整改说明与整改后照片都必须提交。</p>
+        <form th:action="@{/workorders/{id}/remediation(id=${order.id()})}" method="post"
+              enctype="multipart/form-data" data-guard novalidate>
+            <div class="form-field">
+                <label class="required" for="remediationNote">整改说明</label>
+                <textarea id="remediationNote" name="remediationNote" maxlength="500"
+                          th:attr="maxlength=${maxRemediationNote}"
+                          placeholder="说明已采取的整改措施，最多 500 字"></textarea>
+                <p class="field-hint">1~500 字</p>
+            </div>
+            <div class="file-drop" data-file-drop>
+                <label class="required" for="afterImage">整改后照片</label>
+                <input type="file" id="afterImage" name="afterImage" accept="image/jpeg,image/png" data-max-size="5242880">
+                <p class="file-name" data-file-name>仅支持 JPG / PNG，不超过 5MB</p>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">提交整改</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card action-card" th:if="${canReview}">
+        <h2 class="card-title">复查</h2>
+        <p class="hint">请对照整改前后照片核实。退回整改时必须填写复查意见。</p>
+        <form th:action="@{/workorders/{id}/review(id=${order.id()})}" method="post" data-guard novalidate>
+            <fieldset class="radio-group">
+                <legend>复查结论</legend>
+                <label class="radio-option">
+                    <input type="radio" name="action" value="PASS" required>
+                    <span>复查通过，关闭工单</span>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="action" value="RETURN" required>
+                    <span>退回整改</span>
+                </label>
+            </fieldset>
+            <div class="form-field">
+                <label for="reviewComment">复查意见</label>
+                <textarea id="reviewComment" name="reviewComment" maxlength="300"
+                          th:attr="maxlength=${maxReviewComment}"
+                          placeholder="退回整改时必填，最多 300 字"></textarea>
+                <p class="field-hint">退回整改时必填</p>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">提交复查结论</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card action-card" th:if="${closed}">
+        <h2 class="card-title">工单已关闭</h2>
+        <p>复查已通过，本次隐患整改闭环完成。如需继续跟踪，请创建新的巡检。</p>
+        <div class="form-actions">
+            <a class="btn btn-secondary" th:href="@{/workorders}">返回工单列表</a>
+            <a class="btn btn-primary" th:href="@{/inspections/new}">新建巡检</a>
+        </div>
+    </section>
+
+    <p class="back-link"><a th:href="@{/workorders}">← 返回工单列表</a></p>
+</main>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

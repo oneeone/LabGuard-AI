@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>创建整改工单 · LabGuard AI</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page">
+    <nav class="topnav">
+        <a th:href="@{/inspections/new}">新建巡检</a>
+        <a th:href="@{/workorders}">整改工单</a>
+    </nav>
+
+    <header class="page-header">
+        <h1>创建整改工单</h1>
+        <p>工单只能由已人工确认的隐患创建，同一隐患只允许一张工单。</p>
+    </header>
+
+    <div class="alert alert-error" th:if="${formError}" th:text="${formError}"></div>
+
+    <section class="card summary-card" th:if="${hazard}">
+        <h2 class="card-title">关联隐患</h2>
+        <p class="hazard-line">
+            <strong th:text="${hazard.category()}">通道被遮挡</strong>
+            <span class="badge badge-risk" th:classappend="'risk-' + ${hazard.riskLevelClass()}"
+                  th:text="|建议风险等级：${hazard.riskLevelLabel()}|">建议风险等级：中</span>
+            <span class="badge badge-status" th:classappend="'status-' + ${hazard.statusClass()}"
+                  th:text="${hazard.statusLabel()}">已确认</span>
+        </p>
+        <p class="hazard-line"><span class="label">位置</span><span th:text="${hazard.location()}">位置未说明</span></p>
+        <p class="hazard-line"><span class="label">可见证据</span><span th:text="${hazard.evidence()}">无可见证据</span></p>
+        <a class="btn-link" th:href="@{/inspections/{id}/analysis(id=${hazard.inspectionId()})}">返回分析结果页</a>
+    </section>
+
+    <form class="card" th:action="@{/workorders}" th:object="${form}" method="post" data-guard novalidate>
+        <h2 class="card-title">工单信息</h2>
+
+        <input type="hidden" th:field="*{hazardId}">
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('assignee')} ? 'is-invalid'">
+            <label class="required" for="assignee">责任人</label>
+            <input type="text" th:field="*{assignee}" id="assignee" maxlength="30"
+                   placeholder="填写整改责任人姓名" autocomplete="off">
+            <p class="field-error" th:errors="*{assignee}">请填写责任人</p>
+        </div>
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('dueDate')} ? 'is-invalid'">
+            <label class="required" for="dueDate">截止日期</label>
+            <input type="date" th:field="*{dueDate}" id="dueDate" data-min-today>
+            <p class="field-hint">不早于今天</p>
+            <p class="field-error" th:errors="*{dueDate}">截止日期不能早于今天</p>
+        </div>
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('note')} ? 'is-invalid'">
+            <label for="note">备注</label>
+            <textarea th:field="*{note}" id="note" maxlength="200"
+                      placeholder="可补充整改要求，最多 200 字（选填）"></textarea>
+            <p class="field-error" th:errors="*{note}">备注不能超过 200 字</p>
+        </div>
+
+        <div class="form-actions">
+            <a class="btn btn-secondary" th:href="@{/workorders}">取消</a>
+            <button type="submit" class="btn btn-primary">创建工单</button>
+        </div>
+    </form>
+</main>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
