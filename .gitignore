@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 HELP.md
 target/
 !.mvn/wrapper/maven-wrapper.jar
@@ -41,3 +42,12 @@ data/
 uploads/
 *.db
 *.trace.db
+=======
+.idea/
+*.iml
+target/
+.env
+*.db
+*.db-journal
+uploads/
+>>>>>>> 6adcae17b0b28bcef2e596733d0648e829e04666
