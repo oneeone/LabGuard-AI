@@ -173,6 +173,62 @@ class RealAiVisionReviewTest {
     }
 
     @Test
+    @DisplayName("A-20-01 复查图片格式不支持时发送前拒绝，HTTP 请求数为 0")
+    void reviewRejectsUnsupportedImageWithoutRequest() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("PASSED", "证据充分")), Duration.ZERO);
+
+        assertThatThrownBy(() -> service(baseUrl).reviewRemediation(
+                ImageInput.of("fake".getBytes(StandardCharsets.UTF_8), "after.webp"), context()))
+                .isInstanceOfSatisfying(AiVisionException.class,
+                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.UNSUPPORTED_IMAGE));
+        assertThat(requestCount.get()).isZero();
+    }
+
+    @Test
+    @DisplayName("A-20-02 复查图片为空或超出 10MB 时被拒绝，不发起调用")
+    void reviewRejectsEmptyAndOversizedImage() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("PASSED", "证据充分")), Duration.ZERO);
+        RealAiVisionService service = service(baseUrl);
+        byte[] oversized = new byte[10 * 1024 * 1024 + 1];
+        oversized[0] = 'x';
+
+        assertThatThrownBy(() -> service.reviewRemediation(
+                ImageInput.of(new byte[0], "after.png"), context()))
+                .isInstanceOfSatisfying(AiVisionException.class,
+                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.REQUEST_FAILED));
+        assertThatThrownBy(() -> service.reviewRemediation(
+                ImageInput.of(oversized, "after.png"), context()))
+                .isInstanceOfSatisfying(AiVisionException.class,
+                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.UNSUPPORTED_IMAGE));
+        assertThat(requestCount.get()).isZero();
+    }
+
+    @Test
+    @DisplayName("A-20-03 复查读取超时返回 TIMEOUT，不会返回 PASSED")
+    void reviewTimeoutFails() throws IOException {
+        String baseUrl = startServer(200,
+                envelope(reviewContract("PASSED", "通道已恢复畅通，无堆放物")), Duration.ofMillis(1500));
+
+        assertThatThrownBy(() -> service(baseUrl, Duration.ofMillis(300)).reviewRemediation(image(), context()))
+                .isInstanceOfSatisfying(AiVisionException.class, ex -> {
+                    assertThat(ex.type()).isEqualTo(AiErrorType.TIMEOUT);
+                    assertThat(ex.getMessage()).isEqualTo("视觉 API 请求超时，请检查网络或稍后重试。");
+                });
+    }
+
+    @Test
+    @DisplayName("A-20-04 复查网络连接失败返回 NETWORK_ERROR，不伪造结果")
+    void reviewNetworkFailureFails() {
+        RealAiVisionService service = service("http://127.0.0.1:1");
+
+        assertThatThrownBy(() -> service.reviewRemediation(image(), context()))
+                .isInstanceOfSatisfying(AiVisionException.class, ex -> {
+                    assertThat(ex.type()).isEqualTo(AiErrorType.NETWORK_ERROR);
+                    assertThat(ex.getMessage()).doesNotContain("PASSED");
+                });
+    }
+
+    @Test
     @DisplayName("A-19-20 边界：AI 服务不依赖工单服务，不直接修改工单状态")
     void aiServiceHasNoWorkOrderDependency() {
         for (Class<?> type : new Class<?>[]{RealAiVisionService.class, DemoAiVisionService.class,
@@ -194,13 +250,17 @@ class RealAiVisionReviewTest {
     }
 
     private RealAiVisionService service(String baseUrl) {
+        return service(baseUrl, Duration.ofSeconds(2));
+    }
+
+    private RealAiVisionService service(String baseUrl, Duration readTimeout) {
         AiVisionProperties properties = new AiVisionProperties();
         properties.setMode("real");
         properties.setBaseUrl(baseUrl);
         properties.setApiKey("test-key");
         properties.setModel("vision-test-model");
         properties.setConnectTimeout(Duration.ofSeconds(1));
-        properties.setReadTimeout(Duration.ofSeconds(2));
+        properties.setReadTimeout(readTimeout);
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(1))
                 .build();
@@ -237,6 +297,10 @@ class RealAiVisionReviewTest {
     }
 
     private String startServer(int status, String body) throws IOException {
+        return startServer(status, body, Duration.ZERO);
+    }
+
+    private String startServer(int status, String body, Duration delay) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         executor = Executors.newCachedThreadPool(runnable -> {
             Thread thread = new Thread(runnable);
@@ -247,6 +311,7 @@ class RealAiVisionReviewTest {
         server.createContext("/chat/completions", exchange -> {
             requestCount.incrementAndGet();
             lastBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            sleep(delay);
             byte[] payload = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             try {
@@ -260,5 +325,16 @@ class RealAiVisionReviewTest {
         });
         server.start();
         return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    private void sleep(Duration delay) {
+        if (delay.isZero()) {
+            return;
+        }
+        try {
+            Thread.sleep(delay.toMillis());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

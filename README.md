@@ -50,7 +50,7 @@ mvn package
 java -jar target/labguard-ai-0.1.0-SNAPSHOT.jar
 ```
 
-AI 模块测试 A-01~A-12 使用 JDK 内置 HttpServer 模拟服务商响应，不调用外部 API，也不需要真实密钥。
+AI 模块测试 A-01~A-20 使用 JDK 内置 HttpServer 模拟服务商响应，不调用外部 API，也不需要真实密钥。完整的契约、服务商选型、错误清单与冒烟测试步骤见 `_docs/成员A-视觉AI配置与API契约说明.md`。
 
 ## AI vision service
 `AiVisionService` 是接口，业务层只依赖接口，不直接依赖 HTTP 客户端。
@@ -61,6 +61,14 @@ AI 模块测试 A-01~A-12 使用 JDK 内置 HttpServer 模拟服务商响应，�
   - 401/403 → `AUTH_FAILED`，429 → `RATE_LIMITED`，5xx → `SERVER_ERROR`，超时 → `TIMEOUT`，连接失败 → `NETWORK_ERROR`，非法或缺少字段的 JSON → `INVALID_RESPONSE`。
   - 失败只抛结构化异常，不会回退到演示数据，也不会伪造成功结果。
 - `AiVisionResponseParser` 严格校验模型输出：`hazards` 必须是数组；`category`、`location`、`evidence`、`suggestedAction` 必填；`confidence` 必须是 0~1；`needsHumanReview` 必须是布尔值；`riskLevel` 仅接受高/中/低（缺失记为“待评估”）。
+
+### 整改照片复查（reviewRemediation）
+`AiVisionService.reviewRemediation(image, RemediationContext)` 结合原风险上下文分析整改后图片，返回 `RemediationReview`：
+- `outcome` 仅接受 `PASSED|FAILED|INCONCLUSIVE`；缺失或非法取值 → `INVALID_RESPONSE`，失败不会被当作通过。
+- `PASSED` 但证据为空自动降级为 `INCONCLUSIVE`；`FAILED` 但 `remainingHazards` 为空 → `INVALID_RESPONSE`。
+- 复查结果 `needsHumanReview` 恒为 `true`：AI 只给建议，关闭工单由人工复查决策。
+- demo 模式复查固定返回 `INCONCLUSIVE` + `DEMO` 来源，绝不伪装成通过。
+- 图片无效、超时、断网、5xx、非法 JSON 均抛结构化异常且零伪造结果（测试 A-20-01~04）。
 
 配置变量：`VISION_MODE`、`VISION_API_BASE_URL`、`VISION_API_KEY`、`VISION_MODEL`、`VISION_CONNECT_TIMEOUT`、`VISION_READ_TIMEOUT`，见 `.env.example`。`VISION_API_BASE_URL` 可直接写完整 `/chat/completions` 地址，也可只写基础地址（服务会自动补全路径）。
 
@@ -78,6 +86,9 @@ src/main/java/com/labguard/
 │   ├── AiAnalysisResult.java
 │   ├── AiResultSource.java
 │   ├── Hazard.java
+│   ├── RemediationContext.java
+│   ├── RemediationReview.java
+│   ├── ReviewOutcome.java
 │   └── WorkOrder.java
 └── service/
     ├── AiErrorType.java
@@ -86,6 +97,7 @@ src/main/java/com/labguard/
     ├── AiVisionResponseParser.java
     ├── AiVisionService.java
     ├── DemoAiVisionService.java
+    ├── HazardReviewRules.java
     ├── ImageInput.java
     ├── RealAiVisionService.java
     └── WorkOrderService.java
@@ -98,7 +110,9 @@ src/test/java/com/labguard/
 └── service/
     ├── AiVisionResponseParserTest.java
     ├── DemoAiVisionServiceTest.java
+    ├── HazardReviewRulesTest.java
     ├── ImageInputTest.java
+    ├── RealAiVisionReviewTest.java
     └── RealAiVisionServiceTest.java
 pom.xml
 ```
