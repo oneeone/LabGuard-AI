@@ -4,6 +4,8 @@
 适用范围：`AiVisionService` 及其两个实现 `RealAiVisionService`（mode=real）、`DemoAiVisionService`（mode=demo）。
 冻结规则：本文件所列请求契约、响应契约、错误类型和配置变量为 v1.0 最终版；后续变更必须先更新本文档并同步成员 B、C、D，再改代码。
 
+> 集成备注（10/21 合并）：本文档中的 JSON 字段契约（`hazards`、`outcome` 等）在集成后保持不变；仅 Java 类名由 `Hazard` 改为 `HazardItem`（AI 分析 DTO），以避免与成员 B 的数据库实体 `Hazard` 撞名；落库时由 `DefaultInspectionService` 调用 `Hazard.fromAi(...)` 转换，风险等级“待评估”映射为 `RiskLevel.UNKNOWN`。`EnvConfig`（成员 D）使 `.env` 在启动前自动加载，优先级：系统环境变量 > `.env` > application.properties。
+
 ---
 
 ## 一、服务商、协议与模型
@@ -103,7 +105,7 @@
 | VISION_MIN_CONFIDENCE | `0.6` | 可选，低置信强制人工核验阈值（0~1） |
 | VISION_CATEGORY_WHITELIST | 逗号分隔大写 | 可选，留空不限制类别 |
 
-Spring Boot 不自动读取 `.env`，`.env.example` 仅为变量清单；请在终端或 IDE 运行配置中设置环境变量。
+环境变量由 `EnvConfig` 自动读取 `.env`（也支持系统环境变量覆盖）。`.env.example` 是变量清单，复制为 `.env` 即用，`.env` 已在 `.gitignore` 中。
 
 ## 四、错误类型与处理（冻结）
 
