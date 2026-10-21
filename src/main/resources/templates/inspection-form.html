@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>新建巡检 · LabGuard AI</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page">
+    <nav class="topnav">
+        <a th:href="@{/inspections/new}">新建巡检</a>
+        <a th:href="@{/workorders}">整改工单</a>
+    </nav>
+
+    <header class="page-header">
+        <h1>新建巡检</h1>
+        <p>上传实验室现场照片并填写巡检信息。AI 分析结果仅作为辅助线索，须经人工确认后方可创建整改工单。</p>
+    </header>
+
+    <div class="alert alert-error"
+         th:if="${analysisError != null}"
+         th:text="${analysisError}">AI 分析失败，请稍后重试</div>
+
+    <div class="alert alert-error"
+         th:if="${fileError != null}"
+         th:text="${fileError}">请选择图片：仅支持 JPG / PNG，且大小不超过 5MB</div>
+
+    <form id="inspectionForm"
+          class="card"
+          th:action="@{/inspections}"
+          th:object="${form}"
+          method="post"
+          enctype="multipart/form-data"
+          novalidate>
+
+        <h2 class="card-title">巡检信息</h2>
+
+        <div class="form-field" th:classappend="${fileError != null} ? 'is-invalid'">
+            <label class="required" for="file">实验室照片</label>
+            <div class="file-drop" id="fileDrop" th:classappend="${fileError != null} ? 'is-invalid'">
+                <input type="file" id="file" name="file" accept="image/jpeg,image/png">
+                <p class="file-name" id="fileName">尚未选择文件</p>
+            </div>
+            <p class="field-hint">支持 JPG、PNG 格式，文件大小不超过 5MB</p>
+            <p class="field-error">请选择图片：仅支持 JPG / PNG，且大小不超过 5MB</p>
+        </div>
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('labName')} ? 'is-invalid'">
+            <label class="required" for="labName">实验室名称</label>
+            <input type="text"
+                   th:field="*{labName}"
+                   maxlength="50"
+                   placeholder="例如：化学实验楼 A302"
+                   autocomplete="off">
+            <p class="field-error" th:errors="*{labName}">请填写实验室名称</p>
+        </div>
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('inspector')} ? 'is-invalid'">
+            <label class="required" for="inspector">巡检人</label>
+            <input type="text"
+                   th:field="*{inspector}"
+                   maxlength="30"
+                   placeholder="填写巡检人姓名"
+                   autocomplete="off">
+            <p class="field-error" th:errors="*{inspector}">请填写巡检人姓名</p>
+        </div>
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('inspectionTime')} ? 'is-invalid'">
+            <label for="inspectionTime">巡检时间</label>
+            <input type="datetime-local" th:field="*{inspectionTime}">
+            <p class="field-hint">不填则以提交时间为准，不能晚于当前时间</p>
+            <p class="field-error" th:errors="*{inspectionTime}">巡检时间不能晚于当前时间</p>
+        </div>
+
+        <div class="form-field" th:classappend="${#fields.hasErrors('note')} ? 'is-invalid'">
+            <label for="note">备注</label>
+            <textarea th:field="*{note}"
+                      maxlength="200"
+                      placeholder="可补充现场情况，最多 200 字（选填）"></textarea>
+            <p class="field-error" th:errors="*{note}">备注不能超过 200 字</p>
+        </div>
+
+        <div class="form-actions">
+            <button type="reset" class="btn btn-secondary">清空</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn">提交并开始 AI 分析</button>
+        </div>
+    </form>
+</main>
+
+<script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/upload.js}"></script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>整改工单 · LabGuard AI</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page page-wide">
+    <nav class="topnav">
+        <a th:href="@{/inspections/new}">新建巡检</a>
+        <a th:href="@{/workorders}">整改工单</a>
+    </nav>
+
+    <header class="page-header">
+        <h1>整改工单</h1>
+        <p>按状态查看看板；点击工单编号进入详情，提交整改或执行复查。</p>
+    </header>
+
+    <div class="alert alert-error" th:if="${listError}" th:text="${listError}"></div>
+
+    <nav class="filter-bar">
+        <a class="filter-link" th:classappend="${statusFilter == ''} ? 'is-active'"
+           th:href="@{/workorders}">全部</a>
+        <a class="filter-link" th:each="status : ${statuses}"
+           th:classappend="${statusFilter == status.name()} ? 'is-active'"
+           th:href="@{/workorders(status=${status.name()})}"
+           th:text="${status.label()}">待整改</a>
+    </nav>
+
+    <div class="empty-state" th:if="${#lists.isEmpty(orders)}">
+        当前筛选条件下没有工单。经人工确认的风险可在分析结果页创建工单。
+    </div>
+
+    <div class="card table-card" th:unless="${#lists.isEmpty(orders)}">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>工单编号</th>
+                <th>隐患类别</th>
+                <th>建议风险等级</th>
+                <th>实验室</th>
+                <th>责任人</th>
+                <th>截止日期</th>
+                <th>状态</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="order : ${orders}">
+                <td th:text="|#${order.id()}|">#1</td>
+                <td th:text="${order.category()}">通道被遮挡</td>
+                <td>
+                    <span class="badge badge-risk" th:classappend="'risk-' + ${order.riskLevelClass()}"
+                          th:text="${order.riskLevelLabel()}">中</span>
+                </td>
+                <td th:text="${order.labName()}">化学实验楼 A302</td>
+                <td th:text="${order.assignee()}">李四</td>
+                <td>
+                    <span th:text="${order.dueDateText()}">2026-10-25</span>
+                    <span class="badge badge-overdue" th:if="${order.overdue()}">已超期</span>
+                </td>
+                <td>
+                    <span class="badge badge-status"
+                          th:classappend="'status-' + ${order.statusClass()}"
+                          th:text="${order.statusLabel()}">待整改</span>
+                </td>
+                <td><a th:href="@{/workorders/{id}(id=${order.id()})}">查看详情</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
