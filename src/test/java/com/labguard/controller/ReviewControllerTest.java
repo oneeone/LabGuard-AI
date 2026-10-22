@@ -4,6 +4,7 @@ import com.labguard.model.WorkOrderStatus;
 import com.labguard.service.HazardService;
 import com.labguard.service.LocalFileStorage;
 import com.labguard.service.WorkOrderService;
+import com.labguard.service.RemediationReviewService;
 import com.labguard.service.WorkOrderTimelineService;
 import com.labguard.workflow.WorkflowException;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +50,9 @@ class ReviewControllerTest {
 
     @MockitoBean
     private WorkOrderTimelineService timelineService;
+
+    @MockitoBean
+    private RemediationReviewService remediationReviewService;
 
     @Test
     @DisplayName("A6 action=PASS：工单关闭")

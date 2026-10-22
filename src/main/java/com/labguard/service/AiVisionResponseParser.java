@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
+import com.labguard.model.CheckStatus;
+import com.labguard.model.Comparability;
+import com.labguard.model.EvidenceCheck;
 import com.labguard.model.HazardItem;
 import com.labguard.model.RemediationReview;
 import com.labguard.model.ReviewOutcome;
@@ -57,14 +60,24 @@ public class AiVisionResponseParser {
 
     /**
      * 解析整改照片复查响应。契约：
-     * {"outcome":"PASSED|FAILED|INCONCLUSIVE","evidence":"...",
-     *  "remainingHazards":[...同 hazards 契约...],"uncertainty":"...","suggestedAction":"..."}
-     * outcome 缺失或非法取值一律 INVALID_RESPONSE，失败不会被当作通过。
+     * {"comparability":"COMPARABLE|PARTIAL|NOT_COMPARABLE","evidence":"...",
+     *  "checks":[{"point":"...","status":"RESOLVED|UNRESOLVED|INCONCLUSIVE","visibleEvidence":"...","reason":"..."}],
+     *  "remainingHazards":[...],"uncertainty":"...","suggestedAction":"..."}
+     * 整体结论由 {@link RemediationReview} 按逐点结果推导，模型不直接决定；
+     * checks 缺失、status 非法、RESOLVED 无可见依据一律 INVALID_RESPONSE。
      */
     public RemediationReview parseReview(String responseBody, String model) {
         String payload = extractModelContent(responseBody);
         JsonNode root = readJson(payload);
-        ReviewOutcome outcome = outcome(root.get("outcome"));
+        Comparability comparability = comparability(root.get("comparability"));
+        JsonNode checksNode = root.get("checks");
+        if (checksNode == null || !checksNode.isArray() || checksNode.isEmpty()) {
+            throw invalid("响应缺少 checks 逐点核验数组");
+        }
+        List<EvidenceCheck> checks = new ArrayList<>();
+        for (int i = 0; i < checksNode.size(); i++) {
+            checks.add(parseCheck(checksNode.get(i), i));
+        }
         String evidence = optionalText(root, "evidence");
         String uncertainty = optionalText(root, "uncertainty");
         String suggestedAction = optionalText(root, "suggestedAction");
@@ -78,21 +91,38 @@ public class AiVisionResponseParser {
                 remaining.add(reviewRules.apply(parseHazard(hazardsNode.get(i), i)));
             }
         }
-        if (outcome == ReviewOutcome.FAILED && remaining.isEmpty()) {
-            throw invalid("outcome=FAILED 但 remainingHazards 缺少仍可见的风险证据");
-        }
-        return new RemediationReview(outcome, evidence, remaining, uncertainty, true,
-                suggestedAction, AiResultSource.REAL, model, Instant.now(), responseBody);
+        // 先以 INCONCLUSIVE 传入，整体结论由逐点规则推导，禁止模型直接放行。
+        return new RemediationReview(ReviewOutcome.INCONCLUSIVE, evidence, remaining, uncertainty, true,
+                suggestedAction, AiResultSource.REAL, model, Instant.now(), responseBody, checks, comparability);
     }
 
-    private ReviewOutcome outcome(JsonNode node) {
+    private EvidenceCheck parseCheck(JsonNode node, int index) {
+        if (node == null || !node.isObject()) {
+            throw invalid("第 " + (index + 1) + " 个核验点不是 JSON 对象");
+        }
+        String point = requiredText(node, "point", index);
+        String statusText = requiredText(node, "status", index);
+        CheckStatus status;
+        try {
+            status = CheckStatus.valueOf(statusText.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw invalid("第 " + (index + 1) + " 个核验点 status 不合法：" + statusText);
+        }
+        String visibleEvidence = optionalText(node, "visibleEvidence");
+        if (status == CheckStatus.RESOLVED && visibleEvidence.isBlank()) {
+            throw invalid("第 " + (index + 1) + " 个核验点判定 RESOLVED 但缺少 visibleEvidence");
+        }
+        return new EvidenceCheck(point, status, visibleEvidence, optionalText(node, "reason"));
+    }
+
+    private Comparability comparability(JsonNode node) {
         if (node == null || !node.isTextual() || node.asText().isBlank()) {
-            throw invalid("响应缺少合法的 outcome 字段");
+            throw invalid("响应缺少 comparability 字段");
         }
         try {
-            return ReviewOutcome.valueOf(node.asText().trim().toUpperCase(Locale.ROOT));
+            return Comparability.valueOf(node.asText().trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw invalid("outcome 取值不合法：" + node.asText());
+            throw invalid("comparability 取值不合法：" + node.asText());
         }
     }
 

@@ -9,16 +9,16 @@ import com.labguard.model.RemediationReview;
  * 实现：RealAiVisionService（mode=real）、DemoAiVisionService（mode=demo）。
  * <p>
  * 边界：本接口只做分析并返回结构化结果，绝不修改工单状态；
- * 状态流转由成员 B 的工作流服务基于结果人工决策。
+ * 状态流转由工作流服务基于结果人工决策。
  */
 public interface AiVisionService {
 
     AiAnalysisResult analyze(ImageInput image) throws AiVisionException;
 
     /**
-     * 整改照片复查：结合原风险上下文分析整改后的图片。
+     * 整改照片复查：同时接收原始证据照片与整改后照片，结合原风险上下文做目标导向核验。
      * 结果恒为 needsHumanReview=true；调用失败抛 AiVisionException，不会被当作通过。
      */
-    RemediationReview reviewRemediation(ImageInput remediationImage, RemediationContext context)
-            throws AiVisionException;
+    RemediationReview reviewRemediation(ImageInput originalImage, ImageInput remediationImage,
+                                        RemediationContext context) throws AiVisionException;
 }

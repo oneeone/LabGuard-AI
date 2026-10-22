@@ -72,7 +72,25 @@ CREATE TABLE IF NOT EXISTS audit_event (
     created_at  TEXT    NOT NULL
 );
 
+-- 5. AI 整改核验记录（只记录建议，不改工单状态）
+CREATE TABLE IF NOT EXISTS ai_review (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_order_id    INTEGER NOT NULL,
+    outcome          TEXT    NOT NULL CHECK (outcome IN ('PASSED', 'FAILED', 'INCONCLUSIVE')),
+    evidence         TEXT    NOT NULL,
+    checks_json      TEXT    NOT NULL,
+    comparability    TEXT    NOT NULL CHECK (comparability IN ('COMPARABLE', 'PARTIAL', 'NOT_COMPARABLE')),
+    uncertainty      TEXT,
+    suggested_action TEXT,
+    source           TEXT    NOT NULL CHECK (source IN ('REAL', 'DEMO')),
+    model            TEXT,
+    raw_response     TEXT,
+    created_at       TEXT    NOT NULL,
+    FOREIGN KEY (work_order_id) REFERENCES work_order (id)
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_hazard_inspection ON hazard (inspection_id);
 CREATE INDEX IF NOT EXISTS idx_work_order_status ON work_order (status);
 CREATE INDEX IF NOT EXISTS idx_audit_entity      ON audit_event (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_ai_review_order   ON ai_review (work_order_id);

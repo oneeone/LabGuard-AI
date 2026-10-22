@@ -2,6 +2,9 @@ package com.labguard.service;
 
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
+import com.labguard.model.CheckStatus;
+import com.labguard.model.Comparability;
+import com.labguard.model.EvidenceCheck;
 import com.labguard.model.HazardItem;
 import com.labguard.model.RemediationContext;
 import com.labguard.model.RemediationReview;
@@ -37,11 +40,20 @@ public class DemoAiVisionService implements AiVisionService {
     }
 
     @Override
-    public RemediationReview reviewRemediation(ImageInput remediationImage, RemediationContext context) {
+    public RemediationReview reviewRemediation(ImageInput originalImage, ImageInput remediationImage,
+                                               RemediationContext context) {
+        if (originalImage == null || remediationImage == null) {
+            throw new AiVisionException(AiErrorType.REQUEST_FAILED, "复查必须同时提供原始照片和整改后照片");
+        }
         if (context == null) {
             throw new AiVisionException(AiErrorType.REQUEST_FAILED, "复查上下文不能为空");
         }
-        // 演示数据无法验证真实整改效果，固定返回 INCONCLUSIVE，绝不伪装成通过。
+        // 演示数据无法验证真实整改效果：逐点固定 INCONCLUSIVE，整体结论自然不会被判为通过。
+        EvidenceCheck demoCheck = new EvidenceCheck(
+                context.originalEvidence().isBlank() ? context.originalLocation() : context.originalEvidence(),
+                CheckStatus.INCONCLUSIVE,
+                "",
+                "演示模式未调用真实视觉 API，无法核验该证据点。");
         return new RemediationReview(
                 ReviewOutcome.INCONCLUSIVE,
                 "演示数据：未调用真实视觉 API，不能据此判断整改效果。",
@@ -52,7 +64,9 @@ public class DemoAiVisionService implements AiVisionService {
                 AiResultSource.DEMO,
                 "demo-sample",
                 Instant.now(),
-                null
+                null,
+                List.of(demoCheck),
+                Comparability.PARTIAL
         );
     }
 }

@@ -42,6 +42,25 @@ public class LocalFileStorage {
         return root;
     }
 
+    /**
+     * 按页面保存的访问路径读回图片字节，供 AI 复查时把原图作为输入。
+     * 只接受本服务生成的 /uploads/ 路径，并做目录穿越防护。
+     */
+    public byte[] load(String urlPath) {
+        if (urlPath == null || !urlPath.startsWith(URL_PREFIX)) {
+            throw new IllegalStateException("图片路径不合法，无法读取原图");
+        }
+        Path resolved = root.resolve(urlPath.substring(URL_PREFIX.length())).normalize();
+        if (!resolved.startsWith(root) || !Files.isRegularFile(resolved)) {
+            throw new IllegalStateException("图片文件不存在，无法读取原图");
+        }
+        try {
+            return Files.readAllBytes(resolved);
+        } catch (IOException ex) {
+            throw new IllegalStateException("图片读取失败，请重试", ex);
+        }
+    }
+
     private static String extensionOf(String filename) {
         String name = filename == null ? "" : filename.trim();
         int dot = name.lastIndexOf('.');

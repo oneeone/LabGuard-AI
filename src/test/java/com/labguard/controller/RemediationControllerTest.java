@@ -4,6 +4,7 @@ import com.labguard.model.WorkOrderStatus;
 import com.labguard.service.HazardService;
 import com.labguard.service.LocalFileStorage;
 import com.labguard.service.WorkOrderService;
+import com.labguard.service.RemediationReviewService;
 import com.labguard.service.WorkOrderTimelineService;
 import com.labguard.workflow.WorkflowException;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,9 @@ class RemediationControllerTest {
 
     @MockitoBean
     private WorkOrderTimelineService timelineService;
+
+    @MockitoBean
+    private RemediationReviewService remediationReviewService;
 
     @Test
     @DisplayName("A5 待整改状态提交：重定向到详情页并进入待复查")

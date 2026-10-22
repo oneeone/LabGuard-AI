@@ -2,6 +2,7 @@ package com.labguard.service;
 
 import com.labguard.model.AiAnalysisResult;
 import com.labguard.model.AiResultSource;
+import com.labguard.model.Comparability;
 import com.labguard.model.HazardItem;
 import com.labguard.model.RemediationContext;
 import com.labguard.model.RemediationReview;
@@ -40,8 +41,8 @@ class DemoAiVisionServiceTest {
     @DisplayName("A-19-10 演示复查固定 INCONCLUSIVE + DEMO，不伪装成通过")
     void demoReviewIsInconclusiveDemo() {
         DemoAiVisionService service = new DemoAiVisionService();
-        RemediationReview review = service.reviewRemediation(
-                ImageInput.of("fake".getBytes(StandardCharsets.UTF_8), "after.png"),
+        ImageInput image = ImageInput.of("fake".getBytes(StandardCharsets.UTF_8), "after.png");
+        RemediationReview review = service.reviewRemediation(image, image,
                 new RemediationContext("WO-1", "BLOCKED_EXIT", "移除杂物并保持通道畅通"));
 
         assertThat(review.outcome()).isEqualTo(ReviewOutcome.INCONCLUSIVE);
@@ -49,5 +50,23 @@ class DemoAiVisionServiceTest {
         assertThat(review.needsHumanReview()).isTrue();
         assertThat(review.evidence()).contains("演示数据");
         assertThat(review.suggestedAction()).contains("现场核验");
+        assertThat(review.checks()).hasSize(1);
+        assertThat(review.checks().get(0).status().name()).isEqualTo("INCONCLUSIVE");
+        assertThat(review.comparability()).isEqualTo(Comparability.PARTIAL);
+    }
+
+    @Test
+    @DisplayName("A-22-01 演示复查缺少原图或整改后图时拒绝")
+    void demoReviewRequiresBothImages() {
+        DemoAiVisionService service = new DemoAiVisionService();
+        ImageInput image = ImageInput.of("fake".getBytes(StandardCharsets.UTF_8), "after.png");
+        RemediationContext context = new RemediationContext("WO-1", "BLOCKED_EXIT", "目标");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.reviewRemediation(null, image, context))
+                .isInstanceOf(AiVisionException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.reviewRemediation(image, null, context))
+                .isInstanceOf(AiVisionException.class);
     }
 }

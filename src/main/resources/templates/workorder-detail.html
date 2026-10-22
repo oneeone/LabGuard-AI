@@ -94,6 +94,74 @@
         </div>
     </section>
 
+    <section class="card" th:if="${canReview or aiReview != null}">
+        <h2 class="card-title">AI 前后对比核验</h2>
+        <p class="hint">AI 以原始证据为核验清单，对照整改后照片逐条判定；结论只是建议，不会自动关闭工单。</p>
+
+        <div class="empty-state" th:if="${aiReview == null}">
+            <p>尚未执行 AI 核验。</p>
+            <form th:if="${canReview}" th:action="@{/workorders/{id}/ai-review(id=${order.id()})}"
+                  method="post" data-guard>
+                <button type="submit" class="btn btn-primary">对比两张照片并生成核验清单</button>
+            </form>
+        </div>
+
+        <th:block th:if="${aiReview != null}">
+            <div class="badge-group">
+                <span class="badge badge-review"
+                      th:classappend="${aiReview.outcome().name() == 'PASSED'} ? 'review-pass' : (${aiReview.outcome().name() == 'FAILED'} ? 'review-return' : '')"
+                      th:text="${aiReview.outcome().label()}">无法判断</span>
+                <span class="badge" th:text="|可比性：${aiReview.comparability().label()}|">视角可比</span>
+                <span class="badge"
+                      th:classappend="${aiReview.source().name() == 'REAL'} ? 'review-pass' : 'review-return'"
+                      th:text="${aiReview.source().name() == 'REAL'} ? '真实 API' : '演示数据'">来源</span>
+                <span class="badge" th:if="${aiReview.needsHumanReview()}">需人工确认</span>
+            </div>
+            <p class="hint" th:text="|生成时间：${aiReview.createdAtText()}|">生成时间：2026-10-21 15:11</p>
+
+            <div class="evidence-box" th:if="${!#strings.isEmpty(aiReview.evidence())}">
+                <span class="label">整体可见依据</span>
+                <p th:text="${aiReview.evidence()}"></p>
+            </div>
+
+            <div class="table-card" th:if="${!#lists.isEmpty(aiReview.checks())}">
+                <table class="data-table">
+                    <thead>
+                    <tr>
+                        <th>原始证据核验点</th>
+                        <th>判定</th>
+                        <th>本次可见依据</th>
+                        <th>说明</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="check : ${aiReview.checks()}">
+                        <td th:text="${check.point()}"></td>
+                        <td>
+                            <span class="badge badge-review"
+                                  th:classappend="${check.status().name() == 'RESOLVED'} ? 'review-pass' : (${check.status().name() == 'UNRESOLVED'} ? 'review-return' : '')"
+                                  th:text="${check.status().label()}">已解决</span>
+                        </td>
+                        <td th:text="${#strings.isEmpty(check.visibleEvidence())} ? '—' : ${check.visibleEvidence()}"></td>
+                        <td th:text="${#strings.isEmpty(check.reason())} ? '—' : ${check.reason()}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="hint" th:if="${!#strings.isEmpty(aiReview.uncertainty())}"
+               th:text="|不确定性：${aiReview.uncertainty()}|"></p>
+            <p class="hint" th:if="${!#strings.isEmpty(aiReview.suggestedAction())}"
+               th:text="|建议：${aiReview.suggestedAction()}|"></p>
+            <p class="hint" th:if="${aiReview.source().name() == 'DEMO'}">当前为演示数据，不能作为真实核验结论。</p>
+
+            <form th:if="${canReview}" th:action="@{/workorders/{id}/ai-review(id=${order.id()})}"
+                  method="post" data-guard>
+                <button type="submit" class="btn btn-secondary">重新核验</button>
+            </form>
+        </th:block>
+    </section>
+
     <section class="card">
         <h2 class="card-title">复查记录</h2>
         <div class="empty-state" th:if="${order.reviewedAt() == null}">

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.labguard.model.AiResultSource;
+import com.labguard.model.CheckStatus;
+import com.labguard.model.Comparability;
 import com.labguard.model.RemediationContext;
 import com.labguard.model.RemediationReview;
 import com.labguard.model.ReviewOutcome;
@@ -19,6 +21,7 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,7 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 10 月 19 日：整改照片复查链路测试（真实服务 + mock HTTP）。
+ * 整改前后目标导向核验：真实服务 + mock HTTP。
+ * 覆盖双图请求、逐证据点判定、可比性降级与各类失败边界。
  */
 class RealAiVisionReviewTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -49,122 +53,146 @@ class RealAiVisionReviewTest {
     }
 
     @Test
-    @DisplayName("A-19-11 复查请求体包含原风险类别和整改目标")
-    void reviewRequestCarriesContext() throws IOException {
-        String baseUrl = startServer(200, envelope(reviewContract("PASSED", "通道已恢复畅通，无堆放物")));
+    @DisplayName("A-19-11 复查请求同时携带原图、整改后图与原始证据上下文")
+    void reviewRequestCarriesBothImagesAndOriginalEvidence() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "出口前地面可见，无堆放物",
+                List.of(check("纸箱堆放在安全出口前", "RESOLVED", "出口前地面空置", "")))));
 
-        service(baseUrl).reviewRemediation(image(), context());
+        RemediationReview review = service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context());
 
+        assertThat(review.outcome()).isEqualTo(ReviewOutcome.PASSED);
         assertThat(requestCount.get()).isEqualTo(1);
-        assertThat(lastBody.get())
+        String body = lastBody.get();
+        assertThat(body)
                 .contains("BLOCKED_EXIT")
                 .contains("移除杂物并保持安全出口通道畅通")
                 .contains("WO-2026-001")
-                .contains("data:image/png;base64,");
+                .contains("纸箱堆放在安全出口前")
+                .contains("实验室门口")
+                .contains("图1：原始隐患证据照片")
+                .contains("图2：整改后照片");
+        assertThat(countOf(body, "data:image/png;base64,")).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("A-19-12 复查通过建议返回 PASSED，但仍保留人工确认标记和 REAL 来源")
-    void passedKeepsHumanReview() throws IOException {
-        String baseUrl = startServer(200,
-                envelope(reviewContract("PASSED", "通道已恢复畅通，地面无堆放物")));
+    @DisplayName("A-19-12 逐点全部 RESOLVED 且有可见依据时给出 PASSED，仍需人工确认")
+    void allChecksResolvedYieldsPassed() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "通道恢复畅通，地面无堆放物",
+                List.of(check("纸箱堆放在安全出口前", "RESOLVED", "出口前地面空置", "")))));
 
-        RemediationReview review = service(baseUrl).reviewRemediation(image(), context());
+        RemediationReview review = service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context());
 
         assertThat(review.outcome()).isEqualTo(ReviewOutcome.PASSED);
         assertThat(review.source()).isEqualTo(AiResultSource.REAL);
         assertThat(review.needsHumanReview()).isTrue();
-        assertThat(review.evidence()).contains("畅通");
-        assertThat(review.analyzedAt()).isNotNull();
+        assertThat(review.checks()).hasSize(1);
+        assertThat(review.checks().get(0).status()).isEqualTo(CheckStatus.RESOLVED);
+        assertThat(review.checks().get(0).visibleEvidence()).contains("空置");
+        assertThat(review.comparability()).isEqualTo(Comparability.COMPARABLE);
     }
 
     @Test
-    @DisplayName("A-19-13 PASSED 但证据为空时降级为 INCONCLUSIVE，失败不当作通过")
-    void passedWithoutEvidenceDowngrades() throws IOException {
-        String baseUrl = startServer(200, envelope(reviewContract("PASSED", "  ")));
+    @DisplayName("A-19-13 任一核验点 UNRESOLVED 即判定 FAILED，不能被整体证据掩盖")
+    void anyUnresolvedYieldsFailed() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "出口前仍可见纸箱",
+                List.of(check("纸箱堆放在安全出口前", "UNRESOLVED", "出口左侧仍有一个纸箱", "清理不彻底")))));
 
-        RemediationReview review = service(baseUrl).reviewRemediation(image(), context());
-
-        assertThat(review.outcome()).isEqualTo(ReviewOutcome.INCONCLUSIVE);
-        assertThat(review.needsHumanReview()).isTrue();
-    }
-
-    @Test
-    @DisplayName("A-19-14 复查未通过返回 FAILED，并包含剩余风险证据")
-    void failedCarriesRemainingHazards() throws IOException {
-        ObjectNode remaining = mapper.createObjectNode();
-        remaining.put("category", "BLOCKED_EXIT");
-        remaining.put("riskLevel", "高");
-        remaining.put("location", "画面右侧出口前");
-        remaining.put("evidence", "仍可见一个纸箱占用出口通道");
-        remaining.put("confidence", 0.9);
-        remaining.put("uncertainty", "");
-        remaining.put("suggestedAction", "搬离剩余纸箱");
-        remaining.put("needsHumanReview", true);
-        String baseUrl = startServer(200,
-                envelope(reviewContract("FAILED", "出口前仍有杂物", remaining)));
-
-        RemediationReview review = service(baseUrl).reviewRemediation(image(), context());
+        RemediationReview review = service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context());
 
         assertThat(review.outcome()).isEqualTo(ReviewOutcome.FAILED);
-        assertThat(review.remainingHazards()).hasSize(1);
-        assertThat(review.remainingHazards().get(0).evidence()).contains("纸箱");
-        assertThat(review.source()).isEqualTo(AiResultSource.REAL);
+        assertThat(review.checks().get(0).status()).isEqualTo(CheckStatus.UNRESOLVED);
+        assertThat(review.suggestedAction()).contains("人工确认");
     }
 
     @Test
-    @DisplayName("A-19-15 FAILED 但缺少剩余风险证据时返回 INVALID_RESPONSE")
-    void failedWithoutRemainingHazardsRejected() throws IOException {
-        String baseUrl = startServer(200, envelope(reviewContract("FAILED", "仍有风险")));
+    @DisplayName("A-19-14 存在 INCONCLUSIVE 核验点时整体结论为 INCONCLUSIVE")
+    void anyInconclusiveYieldsInconclusive() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("PARTIAL", "出口区域部分可见",
+                List.of(check("纸箱堆放在安全出口前", "INCONCLUSIVE", "", "拍摄角度被门框遮挡")))));
 
-        assertThatThrownBy(() -> service(baseUrl).reviewRemediation(image(), context()))
-                .isInstanceOfSatisfying(AiVisionException.class,
-                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.INVALID_RESPONSE));
-    }
-
-    @Test
-    @DisplayName("A-19-16 证据不足返回 INCONCLUSIVE 并建议重新拍摄或现场核验")
-    void inconclusiveSupported() throws IOException {
-        String baseUrl = startServer(200, envelope(
-                reviewContract("INCONCLUSIVE", "画面角度无法看到出口全貌")));
-
-        RemediationReview review = service(baseUrl).reviewRemediation(image(), context());
+        RemediationReview review = service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context());
 
         assertThat(review.outcome()).isEqualTo(ReviewOutcome.INCONCLUSIVE);
         assertThat(review.needsHumanReview()).isTrue();
-        assertThat(review.source()).isEqualTo(AiResultSource.REAL);
+        assertThat(review.checks().get(0).reason()).contains("遮挡");
     }
 
     @Test
-    @DisplayName("A-19-17 复查 API 返回 500 时抛异常，不会返回 PASSED")
-    void serverErrorNeverPassed() throws IOException {
-        String baseUrl = startServer(500, "{\"error\":\"boom\"}");
+    @DisplayName("A-19-15 视角不可比时即使逐点全部 RESOLVED 也强制 INCONCLUSIVE")
+    void notComparableForcesInconclusive() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("NOT_COMPARABLE", "两张照片视角不同",
+                List.of(check("纸箱堆放在安全出口前", "RESOLVED", "画面中未看到纸箱", "")))));
 
-        assertThatThrownBy(() -> service(baseUrl).reviewRemediation(image(), context()))
+        RemediationReview review = service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context());
+
+        assertThat(review.outcome()).isEqualTo(ReviewOutcome.INCONCLUSIVE);
+        assertThat(review.comparability()).isEqualTo(Comparability.NOT_COMPARABLE);
+        assertThat(review.suggestedAction()).doesNotContain("通过");
+    }
+
+    @Test
+    @DisplayName("A-19-16 PASSED 却没有任何可见证据时降级为 INCONCLUSIVE")
+    void passedWithoutEvidenceDowngrades() throws IOException {
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "  ",
+                List.of(check("纸箱堆放在安全出口前", "RESOLVED", "画面空置", "")))));
+
+        RemediationReview review = service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context());
+
+        assertThat(review.outcome()).isEqualTo(ReviewOutcome.INCONCLUSIVE);
+        assertThat(review.needsHumanReview()).isTrue();
+    }
+
+    @Test
+    @DisplayName("A-19-17 缺少 checks 逐点核验数组时返回 INVALID_RESPONSE")
+    void missingChecksRejected() throws IOException {
+        ObjectNode root = mapper.createObjectNode();
+        root.put("comparability", "COMPARABLE");
+        root.put("evidence", "看起来已清理");
+        String baseUrl = startServer(200, envelope(mapper.writeValueAsString(root)));
+
+        assertThatThrownBy(() -> service(baseUrl).reviewRemediation(originalImage(), remediationImage(), context()))
                 .isInstanceOfSatisfying(AiVisionException.class,
-                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.SERVER_ERROR));
+                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.INVALID_RESPONSE));
     }
 
     @Test
-    @DisplayName("A-19-18 复查返回非法 JSON 或非法 outcome 时返回 INVALID_RESPONSE")
-    void invalidReviewResponseRejected() throws IOException {
+    @DisplayName("A-19-18 RESOLVED 缺少 visibleEvidence 或 status 非法时拒绝")
+    void invalidCheckRejected() throws IOException {
+        String noEvidence = startServer(200, envelope(reviewContract("COMPARABLE", "已清理",
+                List.of(check("纸箱堆放在安全出口前", "RESOLVED", "", "")))));
+        assertThatThrownBy(() -> service(noEvidence).reviewRemediation(originalImage(), remediationImage(), context()))
+                .isInstanceOfSatisfying(AiVisionException.class,
+                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.INVALID_RESPONSE));
+
+        String badStatus = startServer(200, envelope(reviewContract("COMPARABLE", "已清理",
+                List.of(check("纸箱堆放在安全出口前", "MAYBE", "看起来没了", "")))));
+        assertThatThrownBy(() -> service(badStatus).reviewRemediation(originalImage(), remediationImage(), context()))
+                .isInstanceOfSatisfying(AiVisionException.class,
+                        ex -> assertThat(ex.type()).isEqualTo(AiErrorType.INVALID_RESPONSE));
+    }
+
+    @Test
+    @DisplayName("A-19-19 视图不可比之外，非法 comparability 或非法 JSON 同样拒绝")
+    void invalidComparabilityOrJsonRejected() throws IOException {
         String badJson = startServer(200, envelope("not-json"));
-        assertThatThrownBy(() -> service(badJson).reviewRemediation(image(), context()))
+        assertThatThrownBy(() -> service(badJson).reviewRemediation(originalImage(), remediationImage(), context()))
                 .isInstanceOfSatisfying(AiVisionException.class,
                         ex -> assertThat(ex.type()).isEqualTo(AiErrorType.INVALID_RESPONSE));
 
-        String badOutcome = startServer(200, envelope(reviewContract("MAYBE", "证据")));
-        assertThatThrownBy(() -> service(badOutcome).reviewRemediation(image(), context()))
+        String badComparability = startServer(200, envelope(reviewContract("SAME_ANGLE", "证据",
+                List.of(check("纸箱", "RESOLVED", "空置", "")))));
+        assertThatThrownBy(() -> service(badComparability)
+                .reviewRemediation(originalImage(), remediationImage(), context()))
                 .isInstanceOfSatisfying(AiVisionException.class,
                         ex -> assertThat(ex.type()).isEqualTo(AiErrorType.INVALID_RESPONSE));
     }
 
     @Test
-    @DisplayName("A-19-19 配置缺失时复查同样 NOT_CONFIGURED，HTTP 请求数为 0")
+    @DisplayName("A-19-20 配置缺失时复查 NOT_CONFIGURED，HTTP 请求数为 0")
     void reviewWithoutConfigSendsNoRequest() {
         RealAiVisionService service = service("");
 
-        assertThatThrownBy(() -> service.reviewRemediation(image(), context()))
+        assertThatThrownBy(() -> service.reviewRemediation(originalImage(), remediationImage(), context()))
                 .isInstanceOfSatisfying(AiVisionException.class, ex -> {
                     assertThat(ex.type()).isEqualTo(AiErrorType.NOT_CONFIGURED);
                     assertThat(ex.getMessage()).doesNotContain("PASSED");
@@ -173,11 +201,12 @@ class RealAiVisionReviewTest {
     }
 
     @Test
-    @DisplayName("A-20-01 复查图片格式不支持时发送前拒绝，HTTP 请求数为 0")
+    @DisplayName("A-20-01 任一张复查图片格式不支持时发送前拒绝，HTTP 请求数为 0")
     void reviewRejectsUnsupportedImageWithoutRequest() throws IOException {
-        String baseUrl = startServer(200, envelope(reviewContract("PASSED", "证据充分")), Duration.ZERO);
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "证据",
+                List.of(check("纸箱", "RESOLVED", "空置", "")))));
 
-        assertThatThrownBy(() -> service(baseUrl).reviewRemediation(
+        assertThatThrownBy(() -> service(baseUrl).reviewRemediation(originalImage(),
                 ImageInput.of("fake".getBytes(StandardCharsets.UTF_8), "after.webp"), context()))
                 .isInstanceOfSatisfying(AiVisionException.class,
                         ex -> assertThat(ex.type()).isEqualTo(AiErrorType.UNSUPPORTED_IMAGE));
@@ -187,16 +216,17 @@ class RealAiVisionReviewTest {
     @Test
     @DisplayName("A-20-02 复查图片为空或超出 10MB 时被拒绝，不发起调用")
     void reviewRejectsEmptyAndOversizedImage() throws IOException {
-        String baseUrl = startServer(200, envelope(reviewContract("PASSED", "证据充分")), Duration.ZERO);
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "证据",
+                List.of(check("纸箱", "RESOLVED", "空置", "")))));
         RealAiVisionService service = service(baseUrl);
         byte[] oversized = new byte[10 * 1024 * 1024 + 1];
         oversized[0] = 'x';
 
-        assertThatThrownBy(() -> service.reviewRemediation(
+        assertThatThrownBy(() -> service.reviewRemediation(originalImage(),
                 ImageInput.of(new byte[0], "after.png"), context()))
                 .isInstanceOfSatisfying(AiVisionException.class,
                         ex -> assertThat(ex.type()).isEqualTo(AiErrorType.REQUEST_FAILED));
-        assertThatThrownBy(() -> service.reviewRemediation(
+        assertThatThrownBy(() -> service.reviewRemediation(originalImage(),
                 ImageInput.of(oversized, "after.png"), context()))
                 .isInstanceOfSatisfying(AiVisionException.class,
                         ex -> assertThat(ex.type()).isEqualTo(AiErrorType.UNSUPPORTED_IMAGE));
@@ -206,10 +236,11 @@ class RealAiVisionReviewTest {
     @Test
     @DisplayName("A-20-03 复查读取超时返回 TIMEOUT，不会返回 PASSED")
     void reviewTimeoutFails() throws IOException {
-        String baseUrl = startServer(200,
-                envelope(reviewContract("PASSED", "通道已恢复畅通，无堆放物")), Duration.ofMillis(1500));
+        String baseUrl = startServer(200, envelope(reviewContract("COMPARABLE", "通道已恢复畅通",
+                List.of(check("纸箱", "RESOLVED", "空置", "")))), Duration.ofMillis(1500));
 
-        assertThatThrownBy(() -> service(baseUrl, Duration.ofMillis(300)).reviewRemediation(image(), context()))
+        assertThatThrownBy(() -> service(baseUrl, Duration.ofMillis(300))
+                .reviewRemediation(originalImage(), remediationImage(), context()))
                 .isInstanceOfSatisfying(AiVisionException.class, ex -> {
                     assertThat(ex.type()).isEqualTo(AiErrorType.TIMEOUT);
                     assertThat(ex.getMessage()).isEqualTo("视觉 API 请求超时，请检查网络或稍后重试。");
@@ -221,7 +252,7 @@ class RealAiVisionReviewTest {
     void reviewNetworkFailureFails() {
         RealAiVisionService service = service("http://127.0.0.1:1");
 
-        assertThatThrownBy(() -> service.reviewRemediation(image(), context()))
+        assertThatThrownBy(() -> service.reviewRemediation(originalImage(), remediationImage(), context()))
                 .isInstanceOfSatisfying(AiVisionException.class, ex -> {
                     assertThat(ex.type()).isEqualTo(AiErrorType.NETWORK_ERROR);
                     assertThat(ex.getMessage()).doesNotContain("PASSED");
@@ -229,7 +260,7 @@ class RealAiVisionReviewTest {
     }
 
     @Test
-    @DisplayName("A-19-20 边界：AI 服务不依赖工单服务，不直接修改工单状态")
+    @DisplayName("A-19-21 边界：AI 服务不依赖工单服务，不直接修改工单状态")
     void aiServiceHasNoWorkOrderDependency() {
         for (Class<?> type : new Class<?>[]{RealAiVisionService.class, DemoAiVisionService.class,
                 AiVisionResponseParser.class, HazardReviewRules.class}) {
@@ -241,11 +272,13 @@ class RealAiVisionReviewTest {
     }
 
     @Test
-    @DisplayName("A-19-21 复查上下文缺少原类别或整改目标时直接拒绝")
+    @DisplayName("A-19-22 复查上下文缺少原类别、整改目标或原始证据时直接拒绝")
     void reviewContextValidated() {
         assertThatThrownBy(() -> new RemediationContext("WO-1", " ", "目标"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new RemediationContext("WO-1", "BLOCKED_EXIT", " "))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RemediationContext("WO-1", "BLOCKED_EXIT", "", "目标", "", "", "", ""))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -268,24 +301,41 @@ class RealAiVisionReviewTest {
                 new AiVisionResponseParser(mapper, new HazardReviewRules(properties)), mapper, client);
     }
 
-    private ImageInput image() {
+    private ImageInput originalImage() {
+        return ImageInput.of("original-image-bytes".getBytes(StandardCharsets.UTF_8), "before.png");
+    }
+
+    private ImageInput remediationImage() {
         return ImageInput.of("fake-image-bytes".getBytes(StandardCharsets.UTF_8), "after.png");
     }
 
     private RemediationContext context() {
         return new RemediationContext("WO-2026-001", "BLOCKED_EXIT", "安全出口被杂物阻挡",
-                "移除杂物并保持安全出口通道畅通", "移除障碍并巡检", "已安排值日组清理");
+                "移除杂物并保持安全出口通道畅通", "移除障碍并巡检", "已安排值日组清理",
+                "纸箱堆放在安全出口前", "实验室门口");
     }
 
-    private String reviewContract(String outcome, String evidence, ObjectNode... remaining) throws IOException {
+    private ObjectNode check(String point, String status, String visibleEvidence, String reason) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("point", point);
+        node.put("status", status);
+        node.put("visibleEvidence", visibleEvidence);
+        node.put("reason", reason);
+        return node;
+    }
+
+    private String reviewContract(String comparability, String evidence, List<ObjectNode> checks,
+                                  ObjectNode... remaining) throws IOException {
         ObjectNode root = mapper.createObjectNode();
-        root.put("outcome", outcome);
+        root.put("comparability", comparability);
         root.put("evidence", evidence);
         root.put("uncertainty", "仅依据当前视角判断");
         root.put("suggestedAction", "请人工确认后关闭工单");
-        ArrayNode array = root.putArray("remainingHazards");
+        ArrayNode checksNode = root.putArray("checks");
+        checks.forEach(checksNode::add);
+        ArrayNode hazards = root.putArray("remainingHazards");
         for (ObjectNode hazard : remaining) {
-            array.add(hazard);
+            hazards.add(hazard);
         }
         return mapper.writeValueAsString(root);
     }
@@ -294,6 +344,16 @@ class RealAiVisionReviewTest {
         ObjectNode root = mapper.createObjectNode();
         root.putArray("choices").addObject().putObject("message").put("content", content);
         return mapper.writeValueAsString(root);
+    }
+
+    private int countOf(String text, String token) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(token, index)) >= 0) {
+            count++;
+            index += token.length();
+        }
+        return count;
     }
 
     private String startServer(int status, String body) throws IOException {
