@@ -47,6 +47,12 @@ class InspectionControllerTest {
         mockMvc.perform(get("/inspections/new"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("inspection-form"))
+                .andExpect(content().string(containsString("data-file-drop")))
+                .andExpect(content().string(containsString("data-file-preview")))
+                .andExpect(content().string(containsString("data-datetime-field")))
+                .andExpect(content().string(containsString("年/月/日 --:--")))
+                .andExpect(content().string(containsString("nav-action")))
+                .andExpect(content().string(containsString("/images/logo.svg")))
                 .andExpect(model().attributeExists("form"));
     }
 

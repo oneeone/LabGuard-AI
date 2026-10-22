@@ -135,6 +135,7 @@ a {
 
 .form-field.is-invalid input[type="text"],
 .form-field.is-invalid input[type="datetime-local"],
+.form-field.is-invalid input[type="date"],
 .form-field.is-invalid textarea,
 .form-field.is-invalid select {
     border-color: var(--color-danger);
@@ -155,6 +156,54 @@ a {
 
 .form-field.is-invalid .field-error {
     display: block;
+}
+
+/* 截止日期：原生 date 控件负责取值，页面统一显示中文年月日。 */
+.date-field {
+    position: relative;
+}
+
+.date-field.is-enhanced input[type="date"],
+.date-field.is-enhanced input[type="datetime-local"] {
+    position: relative;
+    color: transparent;
+}
+
+.date-field.is-enhanced input[type="date"]::-webkit-datetime-edit,
+.date-field.is-enhanced input[type="datetime-local"]::-webkit-datetime-edit {
+    color: transparent;
+}
+
+.date-field.is-enhanced input[type="date"]::-webkit-calendar-picker-indicator,
+.date-field.is-enhanced input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.date-field-text {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    max-width: calc(100% - 20px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+.date-field.has-value .date-field-text {
+    color: var(--color-text);
 }
 
 .file-drop {
@@ -179,6 +228,20 @@ a {
     color: var(--color-text-muted);
     font-size: 12px;
     word-break: break-all;
+}
+
+.file-preview {
+    display: block;
+    max-width: 100%;
+    max-height: 220px;
+    margin: var(--space-3) auto 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    object-fit: contain;
+}
+
+.file-preview[hidden] {
+    display: none;
 }
 
 .form-actions {
@@ -254,20 +317,40 @@ a {
 
 .topnav {
     display: flex;
-    gap: var(--space-4);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
     margin-bottom: var(--space-4);
     padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-border);
 }
 
-.topnav a {
-    color: var(--color-text-muted);
-    font-weight: 600;
-    text-decoration: none;
+.topnav .brand {
+    display: flex;
+    align-items: center;
 }
 
-.topnav a:hover {
-    color: var(--color-primary);
+.brand-logo {
+    display: block;
+    height: 44px;
+    width: auto;
+}
+
+.topnav .brand:hover {
+    opacity: 0.85;
+}
+
+.nav-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.topnav .nav-action {
+    min-width: 112px;
+    padding: 7px 22px;
+    border-radius: 999px;
+    font-size: 14px;
 }
 
 .headline-meta {
@@ -865,6 +948,24 @@ a {
 }
 
 @media (max-width: 720px) {
+    .brand-logo {
+        height: 34px;
+    }
+
+    .topnav {
+        gap: var(--space-2);
+    }
+
+    .nav-actions {
+        width: 100%;
+    }
+
+    .topnav .nav-action {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 180px;
+    }
+
     .inspection-grid,
     .compare-grid {
         grid-template-columns: minmax(0, 1fr);

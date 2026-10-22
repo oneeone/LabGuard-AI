@@ -70,27 +70,125 @@
         });
     }
 
+    /** 截止日期显示为中文年月日，原生 date 控件仍负责选择和校验。 */
+    function bindDateFields() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-date-field]'), function (field) {
+            var input = field.querySelector('input[type="date"]');
+            var text = field.querySelector('[data-date-text]');
+            if (!input || !text) {
+                return;
+            }
+            field.classList.add('is-enhanced');
+
+            function render() {
+                if (!input.value) {
+                    text.textContent = '年/月/日';
+                    field.classList.remove('has-value');
+                    return;
+                }
+                var parts = input.value.split('-');
+                text.textContent = parts[0] + '年' + parts[1] + '月' + parts[2] + '日';
+                field.classList.add('has-value');
+            }
+
+            input.addEventListener('input', render);
+            input.addEventListener('change', render);
+            render();
+        });
+    }
+
+    /** 巡检时间显示为中文年月日与时分，原生 datetime-local 仍负责取值和校验。 */
+    function bindDateTimeFields() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-datetime-field]'), function (field) {
+            var input = field.querySelector('input[type="datetime-local"]');
+            var text = field.querySelector('[data-datetime-text]');
+            if (!input || !text) {
+                return;
+            }
+            field.classList.add('is-enhanced');
+
+            function render() {
+                var value = input.value;
+                if (!value) {
+                    text.textContent = '年/月/日 --:--';
+                    field.classList.remove('has-value');
+                    return;
+                }
+                var parts = value.split('T');
+                var date = parts[0].split('-');
+                if (date.length !== 3) {
+                    text.textContent = '年/月/日 --:--';
+                    field.classList.remove('has-value');
+                    return;
+                }
+                var time = (parts[1] || '').slice(0, 5) || '--:--';
+                text.textContent = date[0] + '年' + date[1] + '月' + date[2] + '日 ' + time;
+                field.classList.add('has-value');
+            }
+
+            input.addEventListener('input', render);
+            input.addEventListener('change', render);
+            render();
+        });
+    }
+
     /** F4 整改照片选择：回显文件名并做与后端一致的前端校验。 */
     function bindFilePickers() {
         Array.prototype.forEach.call(document.querySelectorAll('[data-file-drop]'), function (drop) {
             var input = drop.querySelector('input[type="file"]');
             var nameLabel = drop.querySelector('[data-file-name]');
+            var preview = drop.querySelector('[data-file-preview]');
+            var previewUrl = null;
             if (!input || !nameLabel) {
                 return;
             }
             var defaultLabel = nameLabel.textContent;
             var maxSize = Number(input.getAttribute('data-max-size')) || 5 * 1024 * 1024;
 
+            function clearPreview() {
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+                if (preview) {
+                    preview.hidden = true;
+                    preview.removeAttribute('src');
+                }
+            }
+
+            function showPreview(file) {
+                if (!preview) {
+                    return;
+                }
+                clearPreview();
+                previewUrl = URL.createObjectURL(file);
+                preview.src = previewUrl;
+                preview.hidden = false;
+            }
+
+            var form = drop.closest('form');
+            if (form) {
+                form.addEventListener('reset', function () {
+                    window.setTimeout(clearPreview, 0);
+                });
+            }
+
             input.addEventListener('change', function () {
                 var invalid = false;
                 if (input.files.length === 0) {
                     nameLabel.textContent = defaultLabel || DEFAULT_FILE_LABEL;
+                    clearPreview();
                 } else {
                     var file = input.files[0];
                     nameLabel.textContent = file.name + '（' + formatSize(file.size) + '）';
                     invalid = file.size === 0
                         || file.size > maxSize
                         || !isAllowed(file, input.getAttribute('accept'));
+                    if (!invalid && (!file.type || file.type.indexOf('image/') === 0)) {
+                        showPreview(file);
+                    } else {
+                        clearPreview();
+                    }
                 }
                 drop.classList.toggle('is-invalid', invalid);
                 var field = drop.closest('.form-field');
@@ -104,6 +202,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         guardForms();
         applyDateMinimums();
+        bindDateFields();
+        bindDateTimeFields();
         bindFilePickers();
     });
 })();

@@ -172,6 +172,8 @@ class WorkOrderControllerTest {
                 .andExpect(view().name("workorder-form"))
                 .andExpect(model().attributeExists("form", "hazard"))
                 .andExpect(content().string(containsString("通道被遮挡")))
+                .andExpect(content().string(containsString("data-date-field")))
+                .andExpect(content().string(containsString("年/月/日")))
                 .andExpect(content().string(containsString("创建整改工单")));
     }
 

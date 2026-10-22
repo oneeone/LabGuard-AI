@@ -4,13 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>分析结果 · LabGuard AI</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/images/logo-mark.svg}">
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
 <main class="page page-wide">
-    <nav class="topnav">
-        <a th:href="@{/inspections/new}">新建巡检</a>
-        <a th:href="@{/workorders}">整改工单</a>
+    <nav class="topnav" aria-label="主导航">
+        <a class="brand" th:href="@{/}" aria-label="LabGuard AI 首页">
+            <img class="brand-logo" th:src="@{/images/logo.svg}" alt="LabGuard AI">
+        </a>
+        <div class="nav-actions">
+            <a class="btn btn-primary nav-action" th:href="@{/inspections/new}">新建巡检</a>
+            <a class="btn btn-secondary nav-action" th:href="@{/workorders}">整改工单</a>
+        </div>
     </nav>
 
     <header class="page-header">
