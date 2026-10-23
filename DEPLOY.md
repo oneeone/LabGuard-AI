@@ -1,26 +1,31 @@
 # LabGuard AI 部署与运行说明
 
-本文对应 `main` 分支提交 `aa9ab12`，适用于 Java 17 及以上环境。默认使用 `demo` 模式，不调用真实视觉 API，也不需要配置密钥即可离线演示。
+本文适用于 v1.0.0 程序包与 `main` 分支代码，要求 Java 17 及以上环境。默认使用 `demo` 模式，不调用真实视觉 API，也不需要配置密钥即可离线演示。
 
-## 三种交付方式
+## 1. 三种交付方式
 
-下列三种方式任选其一即可；本项目同时提供前两种：
+作品提交时，下列三种方式任选其一即可；本项目同时提供前两种：
 
 | 方式 | 本项目对应内容 | 适用场景 |
 | --- | --- | --- |
 | 可运行程序包 | `dist/LabGuard-AI-v1.0.0.zip` | 评委在本机直接运行 |
 | 部署说明 | 本文 `DEPLOY.md` | 评委按步骤自行部署 |
+| 在线体验地址 | 按第 8 节部署后获得公网 URL | 需要免安装体验 |
 
 程序包内已包含可执行 JAR、Windows/Linux 启动脚本、`.env.example` 和本说明，不包含 `.env` 或任何 API 密钥。
 
-## 程序包获取方式
+### 1.1 程序包获取方式
+
+**运行包不在 Git 仓库的文件树里。** `dist/` 被 `.gitignore` 忽略（Spring Initializr 生成的 NetBeans 段落含 `/dist/`），因此 `git clone` 或仓库 ZIP 下载都拿不到 `dist/LabGuard-AI-v1.0.0.zip`。请按下列顺序获取：
 
 1. **GitHub Release 附件**（首选）：<https://github.com/oneeone/LabGuard-AI/releases>
    或直接取最新版：<https://github.com/oneeone/LabGuard-AI/releases/latest>
-   - 文件名：`LabGuard-AI-v1.0.0.zip`
-   - 版本：`v1.0.0`
-   - 大小：约 35 MB（36,970,515 字节）；解压后 `labguard-ai.jar` 为 39,560,858 字节（JAR 已含全部依赖）
-2. **作品附件**：与 ZIP 同源，本地文件即可运行。
+   - 文件名：`LabGuard-AI-v1.0.0.zip`，版本 `v1.0.0`，大小约 35 MB（36,970,515 字节）
+   - 解压后 `labguard-ai.jar` 为 39,560,858 字节（已含全部依赖）
+2. **赛事提交系统的作品附件**：与 ZIP 同源，下载后直接解压运行。
+3. **按第 11 节从源码自行构建**：`mvn clean package` 生成同等可执行 JAR，无需下载程序包。
+
+包内共 8 个文件，已逐项审计：无 `.env`、无 `data/labguard.db`、无 `uploads/` 图片、无 API 密钥：
 
 ```text
 LabGuard-AI-v1.0.0/
@@ -34,7 +39,7 @@ LabGuard-AI-v1.0.0/
 └── uploads/.keep        # 空占位，首次上传自动建目录
 ```
 
-## 环境要求
+## 2. 环境要求
 
 - JDK 17 或更高版本
 - 可用的 `8080` 端口，或通过 `PORT` 环境变量指定其他端口
@@ -48,7 +53,7 @@ LabGuard-AI-v1.0.0/
 java -version
 ```
 
-## Windows 快速启动
+## 3. Windows 快速启动
 
 1. 解压 `LabGuard-AI-v1.0.0.zip`，得到 `LabGuard-AI-v1.0.0` 目录。
 2. 双击 `start-windows.bat`。
@@ -64,7 +69,7 @@ java -jar .\labguard-ai.jar
 
 首次启动会自动创建 `data/labguard.db`；`uploads/` 在首次保存图片时自动创建。数据库表结构由 `schema.sql` 自动初始化。
 
-## Linux / macOS 启动
+## 4. Linux / macOS 启动
 
 ```bash
 unzip LabGuard-AI-v1.0.0.zip
@@ -79,7 +84,7 @@ chmod +x start-linux.sh
 java -jar labguard-ai.jar
 ```
 
-##  配置项
+## 5. 配置项
 
 默认配置可以直接运行。需要修改端口或使用真实视觉 API 时，将 `.env.example` 复制为同目录下的 `.env`：
 
@@ -122,7 +127,7 @@ VISION_MODEL=<视觉模型名>
 - `.env` 已被 `.gitignore` 忽略，不要通过聊天、截图、提交记录或公开仓库传递密钥。
 - 在线部署时优先使用平台提供的 Secret/Environment Variable，不要把 `.env` 打包进镜像或提交到仓库。
 
-##  数据与备份
+## 6. 数据与备份
 
 运行数据只有两处：
 
@@ -143,7 +148,7 @@ mkdir -p data uploads
 chown -R <运行用户>:<运行用户> data uploads
 ```
 
-##  Docker 部署
+## 7. Docker 部署
 
 仓库根目录提供 `Dockerfile`，镜像内默认 `VISION_MODE=demo`，不会包含 `.env`。
 
@@ -169,7 +174,60 @@ docker run -d --name labguard-ai \
 
 必须把 `/app/data` 和 `/app/uploads` 挂载到持久卷；否则容器重建后 SQLite 数据和上传图片会丢失。
 
-## 常见问题
+## 8. 获得在线体验地址
+
+> 在线地址必须依托一个持续运行的主机。没有云平台账号时，无法仅靠本地代码生成稳定的公网 URL。
+
+### 方案 A：支持 Docker 的云平台（推荐）
+
+Render、Railway、Fly.io 等平台均可直接使用仓库中的 `Dockerfile`：
+
+1. 将仓库推送到 GitHub，在平台创建 Web Service 并选择 Docker 部署。
+2. 设置环境变量 `VISION_MODE=demo`；公开演示不要配置真实密钥。
+3. 挂载持久磁盘：
+   - 数据目录：`/app/data`
+   - 上传目录：`/app/uploads`
+   - 如果平台只允许一个挂载点，把卷挂到 `/app/data`，并设置 `UPLOAD_DIR=/app/data/uploads`，让数据库和图片共用同一个持久卷。
+4. 平台会自动注入 `PORT`，应用已通过 `server.port=${PORT:...}` 适配。
+5. 部署完成后，把平台生成的 `https://...` 地址作为在线体验地址。
+
+注意：免费套餐可能使用临时文件系统，重启或重新部署后 SQLite 数据会清空。正式演示请使用持久卷，或改用云数据库。
+
+### 方案 B：云服务器 + systemd
+
+以 Ubuntu 为例，把程序包解压到 `/opt/labguard`：
+
+```ini
+# /etc/systemd/system/labguard.service
+[Unit]
+Description=LabGuard AI
+After=network.target
+
+[Service]
+User=labguard
+WorkingDirectory=/opt/labguard
+EnvironmentFile=/opt/labguard/.env
+ExecStart=/usr/bin/java -jar /opt/labguard/labguard-ai.jar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now labguard
+sudo systemctl status labguard
+```
+
+再使用 Nginx 反向代理到 `127.0.0.1:8080`，并配置 HTTPS。云服务器安全组只需开放 80/443，不要直接暴露管理端口。
+
+### 方案 C：临时演示隧道
+
+Cloudflare Tunnel、ngrok 等工具可以把本机 `8080` 临时映射为公网地址，适合答辩前快速演示，但地址依赖本机持续运行，不适合作为长期提交地址。
+
+## 9. 常见问题
 
 | 现象 | 处理 |
 | --- | --- |
@@ -180,7 +238,17 @@ docker run -d --name labguard-ai \
 | `NOT_CONFIGURED` | `real` 模式下补齐 Base URL、Key、Model 三项 |
 | 页面样式没有更新 | 强制刷新浏览器缓存（`Ctrl + F5`） |
 
-## 从源码重新构建
+## 10. 提交文案参考
+
+可按作品提交表要求填写：
+
+- 可运行程序包：`LabGuard-AI-v1.0.0.zip`（Java 17+，默认 demo 模式，无需密钥），下载入口见第 1.1 节的 GitHub Releases 页面
+- 源代码仓库：<https://github.com/oneeone/LabGuard-AI>
+- 开源组件、第三方模型、外部 API 与数据集使用说明：`_docs/开源组件与第三方资源使用说明.md`
+- 部署说明：本文件
+- 在线体验地址：完成第 8 节部署后填写平台生成的 URL
+
+## 11. 从源码重新构建
 
 需要重新生成可执行 JAR 时：
 
@@ -191,7 +259,7 @@ java -jar target/labguard-ai-0.1.0-SNAPSHOT.jar
 
 `mvn package` 会先执行全部测试；当前版本共 167 项测试。
 
-##  安全边界
+## 12. 安全边界
 
 - AI 结果是辅助建议，不能替代人工复核和现场确认。
 - AI 核验不会自动关闭工单，关闭动作必须由人工完成。
