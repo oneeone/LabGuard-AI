@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+target
+dist
+data
+uploads
+*.db
+*.db-journal
+*.trace.db
+_docs
+.idea
+.vscode
+*.iml
+*.log
