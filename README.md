@@ -32,7 +32,7 @@ VISION_MODE=demo mvn spring-boot:run
 
 Open http://localhost:8080.
 
-The application creates `data/labguard.db` automatically. 工程的 `EnvConfig`（成员 D，经 `META-INF/spring.factories` 注册）会在启动前自动加载项目根目录的 `.env`；优先级：系统环境变量 > `.env` > application.properties 默认值。
+应用启动时会确保 `data/` 目录存在，并自动创建 `data/labguard.db`。工程的 `EnvConfig`（成员 D，经 `META-INF/spring.factories` 注册）会在启动前自动加载项目根目录的 `.env`；优先级：系统环境变量 > `.env` > application.properties 默认值。
 
 ### Real vision API (optional)
 ```powershell
@@ -49,6 +49,21 @@ mvn test
 mvn package
 java -jar target/labguard-ai-0.1.0-SNAPSHOT.jar
 ```
+
+## Deployment
+可运行 JAR 由 `mvn package` 生成。程序包制作、Windows/Linux 启动脚本、Docker 与云平台部署步骤见 [DEPLOY.md](DEPLOY.md)；仓库根目录已提供 `Dockerfile`。
+
+### 程序包获取方式（评委请先读这里）
+
+`dist/` 在 `.gitignore` 中被忽略（Spring Initializr 生成的 NetBeans 段落含 `/dist/`），所以**克隆仓库不会得到可运行程序包**。获取方式：
+
+| 来源 | 位置 |
+| --- | --- |
+| GitHub Release 附件（首选） | <https://github.com/oneeone/LabGuard-AI/releases/latest> |
+| 赛事提交系统附件 | 与 ZIP 同源，下载后直接解压运行 |
+| 从源码构建（无需下载） | `mvn clean package` → `java -jar target/labguard-ai-0.1.0-SNAPSHOT.jar` |
+
+包信息：`LabGuard-AI-v1.0.0.zip`，版本 `v1.0.0`，约 35 MB（36,970,515 字节）。解压后得到 `LabGuard-AI-v1.0.0/` 目录，双击 `start-windows.bat`（或执行 `./start-linux.sh`）后访问 <http://localhost:8080>；默认 `demo` 模式，离线可用、无需密钥。包内不含 `.env`、`data/labguard.db` 与 `uploads/` 图片，仅有 `.env.example` 和两个空占位目录。
 
 AI 模块测试 A-01~A-20 使用 JDK 内置 HttpServer 模拟服务商响应，不调用外部 API，也不需要真实密钥。完整的契约、服务商选型、错误清单与冒烟测试步骤见 `_docs/成员A-视觉AI配置与API契约说明.md`。
 
@@ -87,15 +102,15 @@ src/main/java/com/labguard/
 ├── controller/                   # C：巡检上传/分析结果/隐患审核/工单/整改/复查页面路由
 ├── web/                          # C：表单校验、视图对象( HazardCard 等)、上传映射
 ├── model/                        # A：AiAnalysisResult/HazardItem/AiResultSource/Remediation*；B：Inspection/Hazard/WorkOrder/AuditEvent 实体与状态枚举
-├── repository/                   # B：Spring JDBC 仓储（四表）
+├── repository/                   # B：Spring JDBC 仓储（五表）
 ├── workflow/                     # B：隐患/工单状态机与业务异常
 └── service/                      # A：视觉 AI 双实现与响应校验；B：业务服务；C：巡检编排与本地存储
 src/main/resources/
 ├── application.properties        # SQLite + labguard.ai.* + 环境变量覆盖
-├── schema.sql                    # B：四表终版（inspection/hazard/work_order/audit_event）
+├── schema.sql                    # B：五表终版（inspection/hazard/work_order/audit_event/ai_review）
 ├── static/ + templates/          # C：页面与样式
 └── META-INF/spring.factories     # D：.env 加载器注册
-src/test/java/com/labguard/       # A/B/C/D 单元 + MVC + 持久化测试（共 154 个）
+src/test/java/com/labguard/       # A/B/C/D 单元 + MVC + 持久化测试（共 167 个）
 pom.xml                           # Boot 3.5.x + SQLite + Maven
 ```
 
